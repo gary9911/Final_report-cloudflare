@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>高奢菁英 | 總資產指揮中心 V23.0 (高階動態細節版)</title>
+    <title>總資產指揮中心</title>
     
     <meta name="theme-color" content="#FDFCF8">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -137,7 +137,7 @@
         .mini-bar-segment:last-child { border-right: none; }
         .reduced-font { font-size: 10.5px !important; color: var(--text-muted) !important; font-weight: 500; letter-spacing: 0.2px; }
 
-        /* 🌟 高密度交易紀錄專屬樣式 */
+        
         .tx-card { padding: 16px 14px; margin-bottom: 10px; border-radius: 16px; }
         .tx-stock-header { padding: 8px 10px; border-radius: 10px; display: flex; justify-content: space-between; align-items: flex-end; background: rgba(197,160,89,0.05); }
         .tx-card .card-title { font-size: 16px; margin-bottom: 0px; }
@@ -355,7 +355,7 @@
     const fmtM = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
     const fmtD = n => n.toLocaleString('en-US', { maximumFractionDigits: 3 });
     const fmtP = n => (n > 0 ? '+' : '') + n.toFixed(2) + '%';
-    // 🌟 智慧小數轉換：最多保留 2 位，若為整數自動去 .00
+
     const fmtMax2 = n => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
     const clr = n => n > 0 ? 'color-up' : (n < 0 ? 'color-down' : '');
     const sleep = ms => new Promise(r => setTimeout(r, ms));
