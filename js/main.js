@@ -548,17 +548,28 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
         return null; 
     };
     
-    // 4. 強制字體水平顯示
+   // 4. 強制字體水平顯示
     options.scales.x.ticks.autoSkip = false;
     options.scales.x.ticks.maxRotation = 0;
     options.scales.x.ticks.minRotation = 0;
 
-    // 5. 網格與輔助線設定
+    // 5. 網格與輔助線設定 (終極解法)
+    options.scales.x.grid.display = true; // 【關鍵】：強制打開 X 軸網格功能 (避免被 getChartOpt 關掉)
     options.scales.x.grid.drawTicks = true; 
     options.scales.x.grid.tickLength = 6;
     options.scales.x.grid.tickWidth = 2;
     options.scales.x.grid.drawOnChartArea = true; 
-    options.scales.x.grid.color = 'rgba(150, 150, 150, 0.55)'; 
+    
+    // 使用 function 動態判斷網格線顏色
+    options.scales.x.grid.color = function(context) {
+        // context.tick.label 會拿到剛剛 tick.callback 決定要顯示的字串
+        // 如果有字串 (代表是 1 號)，就給它半透明的線條顏色
+        if (context.tick && context.tick.label) {
+            return 'rgba(150, 150, 150, 0.55)'; 
+        }
+        // 如果沒有字串 (代表是其他日期)，就整條線隱藏 (透明)
+        return 'rgba(0, 0, 0, 0)'; 
+    };
 
     // 6. 建立圖表
     return new Chart(ctx, {
