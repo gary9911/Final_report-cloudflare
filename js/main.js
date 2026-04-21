@@ -283,7 +283,18 @@ const renderStockList = (stocks, isUS) => stocks.map(s => {
     const priceStr = s.isError ? '⚠️阻擋' : (isUS ? '$' : '') + s.currentPrice.toFixed(2);
     const netStr = s.isError ? '--' : 'NT$ ' + fmtM(net * exRate);
     const profitPct = cost === 0 ? 0 : (profit / cost) * 100;
-    const profitStr = s.isError ? '--' : 'NT$ ' + fmtM(profit * exRate) + ' (' + fmtP(profitPct).replace(/[()%]+/g, '') + '%)';
+    
+    // 【修改區塊開始】
+    // 1. 金額：如果 profit > 0，強制加上 "+" 號。負數時 fmtM 會自帶 "-" 號
+    const profitAmtStr = (profit > 0 ? '+' : '') + fmtM(profit * exRate);
+    // 2. 百分比：直接使用原本的 fmtP 函式，它已經內建正負號與 % 符號
+    const profitPctStr = fmtP(profitPct);
+    // 3. 顏色：使用原本的 clr 函式取得對應的 class (color-up 或是 color-down)
+    const colorClass = clr(profit);
+    
+    // 組合最終要顯示的文字
+    const profitStr = s.isError ? '--' : `NT$ ${profitAmtStr} (${profitPctStr})`;
+    // 【修改區塊結束】
 
     return `
                 <div class="list-item">
@@ -297,7 +308,7 @@ const renderStockList = (stocks, isUS) => stocks.map(s => {
                     </div>
                     <div class="item-col text-right">
                         <span class="item-main">${netStr}</span>
-                        <span class="item-sub reduced-font">${profitStr}</span>
+                        <span class="item-sub reduced-font ${colorClass}" style="font-weight: 500;">${profitStr}</span>
                     </div>
                 </div>
             `;
