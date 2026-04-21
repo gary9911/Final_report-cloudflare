@@ -530,6 +530,30 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     const ctx = $(ctxId);
     if (!ctx) return null;
 
+    // 1. 取得預設的圖表選項
+    const options = getChartOpt();
+
+    // 2. 確保 scales 的物件結構存在，避免 undefined 報錯
+    options.scales = options.scales || {};
+    options.scales.x = options.scales.x || {};
+    options.scales.x.ticks = options.scales.x.ticks || {};
+
+    // 3. 加入 X 軸標籤的自訂過濾邏輯
+    options.scales.x.ticks.callback = function(value, index, values) {
+        let labelStr = this.getLabelForValue(value);
+        
+        // 判斷日期字串是否以 "-01" 或 "/01" 結尾 (請確認您傳入的 labels 格式)
+        if (labelStr && (labelStr.endsWith('-01') || labelStr.endsWith('/01'))) {
+            return labelStr; // 顯示 1 號
+        }
+        return ''; // 其他日期留白
+    };
+    
+    // 強制關閉 Chart.js 的自動跳過機制，確保 1 號一定會被畫出來
+    options.scales.x.ticks.autoSkip = false;
+    options.scales.x.ticks.maxRotation = 0;
+
+    // 4. 建立圖表
     return new Chart(ctx, {
         type: 'line',
         data: {
@@ -547,7 +571,7 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
                 tension: 0.3
             }]
         },
-        options: getChartOpt()
+        options: options // 套用修改後的選項
     });
 }
 
