@@ -562,7 +562,7 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     options.scales.x.grid.drawOnChartArea = true; 
     
     // 【新增】：設定垂直輔助線的顏色與透明度 (可依您的介面風格微調顏色，例如使用 rgba(255, 255, 255, 0.1) 如果是深色背景)
-    options.scales.x.grid.color = 'rgba(150, 150, 150, 0.15)'; 
+    options.scales.x.grid.color = 'rgba(150, 150, 150, 0.55)'; 
 
     // 6. 建立圖表
     return new Chart(ctx, {
