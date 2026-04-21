@@ -565,7 +565,7 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
         // context.tick.label 會拿到剛剛 tick.callback 決定要顯示的字串
         // 如果有字串 (代表是 1 號)，就給它半透明的線條顏色
         if (context.tick && context.tick.label) {
-            return 'rgba(150, 150, 150, 0.55)'; 
+            return 'rgba(150, 150, 150, 0.2)'; 
         }
         // 如果沒有字串 (代表是其他日期)，就整條線隱藏 (透明)
         return 'rgba(0, 0, 0, 0)'; 
