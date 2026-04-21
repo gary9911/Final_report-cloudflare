@@ -542,10 +542,10 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     // 3. X 軸標籤顯示邏輯 (只保留 1 號)
     options.scales.x.ticks.callback = function(value, index, values) {
         let labelStr = this.getLabelForValue(value);
-        if (labelStr && (labelStr.endsWith('-01') || labelStr.endsWith('/01'))) {
+        if (labelStr && labelStr.match(/(?:-|\/)0?1$/)) {
             return labelStr; // 顯示 1 號
         }
-        return null; // 其他日期隱藏，不產生刻度與輔助線
+        return null; 
     };
     
     // 4. 強制字體水平顯示
@@ -554,14 +554,10 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     options.scales.x.ticks.minRotation = 0;
 
     // 5. 網格與輔助線設定
-    options.scales.x.grid.drawTicks = true; // 保留 X 軸下方的小刻度
+    options.scales.x.grid.drawTicks = true; 
     options.scales.x.grid.tickLength = 6;
     options.scales.x.grid.tickWidth = 2;
-    
-    // 【修改這裡】：改為 true，開啟穿過圖表區的垂直輔助線
     options.scales.x.grid.drawOnChartArea = true; 
-    
-    // 【新增】：設定垂直輔助線的顏色與透明度 (可依您的介面風格微調顏色，例如使用 rgba(255, 255, 255, 0.1) 如果是深色背景)
     options.scales.x.grid.color = 'rgba(150, 150, 150, 0.55)'; 
 
     // 6. 建立圖表
