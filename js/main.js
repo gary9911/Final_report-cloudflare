@@ -533,27 +533,34 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     // 1. 取得預設的圖表選項
     const options = getChartOpt();
 
-    // 2. 確保 scales 的物件結構存在，避免 undefined 報錯
+    // 2. 確保 scales 的物件結構存在
     options.scales = options.scales || {};
     options.scales.x = options.scales.x || {};
     options.scales.x.ticks = options.scales.x.ticks || {};
+    options.scales.x.grid = options.scales.x.grid || {}; // 加入 grid 設定區塊
 
-    // 3. 加入 X 軸標籤的自訂過濾邏輯
+    // 3. X 軸標籤顯示邏輯
     options.scales.x.ticks.callback = function(value, index, values) {
         let labelStr = this.getLabelForValue(value);
-        
-        // 判斷日期字串是否以 "-01" 或 "/01" 結尾 (請確認您傳入的 labels 格式)
         if (labelStr && (labelStr.endsWith('-01') || labelStr.endsWith('/01'))) {
             return labelStr; // 顯示 1 號
         }
-        return ''; // 其他日期留白
+        // 重要：回傳 null 會連同標記點(tick)一起隱藏，只在 1號 顯示標記
+        return null; 
     };
     
-    // 強制關閉 Chart.js 的自動跳過機制，確保 1 號一定會被畫出來
+    // 4. 強制字體水平顯示 (旋轉角度設為 0)
     options.scales.x.ticks.autoSkip = false;
     options.scales.x.ticks.maxRotation = 0;
+    options.scales.x.ticks.minRotation = 0;
 
-    // 4. 建立圖表
+    // 5. 在 X 軸線上標記小點 (Tick)
+    options.scales.x.grid.drawTicks = true; // 允許畫軸線下方的刻度短線
+    options.scales.x.grid.tickLength = 6;   // 刻度的長度 (向下延伸 6px)
+    options.scales.x.grid.tickWidth = 2;    // 刻度的粗細 (讓它稍微明顯一點)
+    options.scales.x.grid.drawOnChartArea = false; // 關閉垂直延伸的網格線，這樣就只會在 X 軸線上保留一個「小標記」，不會有線穿過整個圖表區
+
+    // 6. 建立圖表
     return new Chart(ctx, {
         type: 'line',
         data: {
@@ -571,7 +578,7 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
                 tension: 0.3
             }]
         },
-        options: options // 套用修改後的選項
+        options: options
     });
 }
 
