@@ -537,28 +537,32 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     options.scales = options.scales || {};
     options.scales.x = options.scales.x || {};
     options.scales.x.ticks = options.scales.x.ticks || {};
-    options.scales.x.grid = options.scales.x.grid || {}; // 加入 grid 設定區塊
+    options.scales.x.grid = options.scales.x.grid || {};
 
-    // 3. X 軸標籤顯示邏輯
+    // 3. X 軸標籤顯示邏輯 (只保留 1 號)
     options.scales.x.ticks.callback = function(value, index, values) {
         let labelStr = this.getLabelForValue(value);
         if (labelStr && (labelStr.endsWith('-01') || labelStr.endsWith('/01'))) {
             return labelStr; // 顯示 1 號
         }
-        // 重要：回傳 null 會連同標記點(tick)一起隱藏，只在 1號 顯示標記
-        return null; 
+        return null; // 其他日期隱藏，不產生刻度與輔助線
     };
     
-    // 4. 強制字體水平顯示 (旋轉角度設為 0)
+    // 4. 強制字體水平顯示
     options.scales.x.ticks.autoSkip = false;
     options.scales.x.ticks.maxRotation = 0;
     options.scales.x.ticks.minRotation = 0;
 
-    // 5. 在 X 軸線上標記小點 (Tick)
-    options.scales.x.grid.drawTicks = true; // 允許畫軸線下方的刻度短線
-    options.scales.x.grid.tickLength = 6;   // 刻度的長度 (向下延伸 6px)
-    options.scales.x.grid.tickWidth = 2;    // 刻度的粗細 (讓它稍微明顯一點)
-    options.scales.x.grid.drawOnChartArea = false; // 關閉垂直延伸的網格線，這樣就只會在 X 軸線上保留一個「小標記」，不會有線穿過整個圖表區
+    // 5. 網格與輔助線設定
+    options.scales.x.grid.drawTicks = true; // 保留 X 軸下方的小刻度
+    options.scales.x.grid.tickLength = 6;
+    options.scales.x.grid.tickWidth = 2;
+    
+    // 【修改這裡】：改為 true，開啟穿過圖表區的垂直輔助線
+    options.scales.x.grid.drawOnChartArea = true; 
+    
+    // 【新增】：設定垂直輔助線的顏色與透明度 (可依您的介面風格微調顏色，例如使用 rgba(255, 255, 255, 0.1) 如果是深色背景)
+    options.scales.x.grid.color = 'rgba(150, 150, 150, 0.15)'; 
 
     // 6. 建立圖表
     return new Chart(ctx, {
