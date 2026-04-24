@@ -586,7 +586,7 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
                 pointBorderColor: color,
                 pointRadius: 2,
                 fill: true,
-                tension: 0.3
+                tension: 0.5
             }]
         },
         options: options
