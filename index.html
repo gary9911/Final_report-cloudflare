@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>高奢菁英 | 總資產指揮中心 V24</title>
+    <title>高奢菁英 | 總資產指揮中心 V25</title>
 
     <meta name="theme-color" content="#FDFCF8">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -209,7 +209,7 @@
                 <div class="mid-hero-section">
                     <div class="hero-title color-down">股票資產總淨值</div>
                     <div class="hero-amount hero-amount-large">
-                        <span class="currency currency-mid">NT$</span><span class="num"
+                        <span class="currency currency-mid" style="color: #549B7B;">NT$</span><span class="num"
                             id="tracking-stock-total">0</span>
                     </div>
                 </div>
@@ -223,10 +223,11 @@
                     </div>
                     <div class="chart-container" id="st-box"><canvas id="stockNetChart"></canvas></div>
                 </div>
+
                 <div class="mid-hero-section">
                     <div class="hero-title text-navy">現金資產淨值</div>
                     <div class="hero-amount hero-amount-large">
-                        <span class="currency currency-mid">NT$</span><span class="num"
+                        <span class="currency currency-mid" style="color: #6d82a3;">NT$</span><span class="num"
                             id="tracking-cash-total">0</span>
                     </div>
                 </div>
@@ -398,49 +399,51 @@
             </div>
 
             <div id="info-content" class="hide">
-    <div class="market-header">
-        <div class="market-subtitle">MARKET DASHBOARD</div>
-        <h1 class="market-title">全球市場監控</h1>
-    </div>
+                <div class="market-header">
+                    <div class="market-subtitle">MARKET DASHBOARD</div>
+                    <h1 class="market-title">全球市場監控</h1>
+                </div>
 
-    <div class="market-grid">
-        <div class="market-card">
-            <div class="card-label">台灣大盤</div>
-            <div class="market-val num" id="mkt-twii">--</div>
-            <div class="market-chg num" id="mkt-twii-chg">--</div>
-        </div>
-        <div class="market-card">
-            <div class="card-label">S&P 500</div>
-            <div class="market-val num" id="mkt-gspc">--</div>
-            <div class="market-chg num" id="mkt-gspc-chg">--</div>
-        </div>
-        <div class="market-card">
-            <div class="card-label">摩台 ETF</div>
-            <div class="market-val num" id="mkt-ewt">--</div>
-            <div class="market-chg num" id="mkt-ewt-chg">--</div>
-        </div>
-        <div class="market-card">
-            <div class="card-label">USD/TWD</div>
-            <div class="market-val num" id="mkt-twdx">--</div>
-            <div class="market-chg num" id="mkt-twdx-chg">--</div>
-        </div>
-        <div class="market-card">
-            <div class="card-label">VIX 指數</div>
-            <div class="market-val num" id="mkt-vix">--</div>
-            <div class="market-chg num" id="mkt-vix-chg">--</div>
-        </div>
-        <div class="market-card">
-            <div class="card-label">Brent 原油</div>
-            <div class="market-val num" id="mkt-oil">--</div>
-            <div class="market-chg num" id="mkt-oil-chg">--</div>
-        </div>
-        <div class="market-card">
-            <div class="card-label">CNN 恐懼與貪婪</div>
-            <div class="market-val num" id="mkt-cnn">--</div>
-            <div class="market-chg num" id="mkt-cnn-chg">--</div>
-        </div>
-    </div>
-</div>
+                <div class="market-grid">
+                    <div class="market-card">
+                        <div class="card-label">台灣大盤</div>
+                        <div class="market-val num" id="mkt-twii">--</div>
+                        <div class="market-chg num" id="mkt-twii-chg">--</div>
+                        <div id="mkt-twii-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">S&P 500</div>
+                        <div class="market-val num" id="mkt-gspc">--</div>
+                        <div class="market-chg num" id="mkt-gspc-chg">--</div>
+                        <div id="mkt-gspc-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">台股夜盤指標</div>
+                        <div class="market-val num" id="mkt-txf">--</div>
+                        <div class="market-chg num" id="mkt-txf-chg">--</div>
+                        <div id="mkt-txf-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">USD/TWD</div>
+                        <div class="market-val num" id="mkt-twdx">--</div>
+                        <div class="market-chg num" id="mkt-twdx-chg">--</div>
+                        <div id="mkt-twdx-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">VIX 指數</div>
+                        <div class="market-val num" id="mkt-vix">--</div>
+                        <div class="market-chg num" id="mkt-vix-chg">--</div>
+                        <div id="mkt-vix-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">Brent 原油</div>
+                        <div class="market-val num" id="mkt-oil">--</div>
+                        <div class="market-chg num" id="mkt-oil-chg">--</div>
+                        <div id="mkt-oil-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    
+                </div>
+            </div>
         </main>
         <div class="footer" id="last-update">資料載入中...</div>
         <div id="toast" class="toast">更新成功</div>
