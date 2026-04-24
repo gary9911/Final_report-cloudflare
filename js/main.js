@@ -134,7 +134,7 @@ async function renderInfoView() {
     const symbols = {
         'twii': '^TWII',  // 台灣大盤
         'gspc': '^GSPC',  // S&P 500
-        'ewt': 'EWT',     // 摩台 ETF
+        'txf': 'EWT',     // 台指期夜盤替代指標
         'twdx': 'TWD=X',  // USD/TWD
         'vix': '^VIX',    // VIX 指數
         'oil': 'BZ=F'     // Brent 原油
@@ -151,11 +151,47 @@ async function renderInfoView() {
             $(`mkt-${id}`).innerText = data.price.toLocaleString(undefined, {minimumFractionDigits: 2});
             $(`mkt-${id}-chg`).innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)} (${fmtP(pct)})`;
             $(`mkt-${id}-chg`).className = `market-chg num ${clr(chg)}`;
+
+            // 🌟 新增：處理時間與盤中/收盤狀態
+            const timeEl = $(`mkt-${id}-time`);
+            if (timeEl) {
+                const d = new Date(data.time);
+                const timeStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                
+                let stateStr = '收盤';
+                let stateColor = '#8A94A6'; // 灰色
+                let stateIcon = '🌑';
+
+                // 🌟 核心修正：計算報價時間與「現在時間」的差距 (分鐘)
+                const now = new Date().getTime();
+                const diffMins = Math.abs(now - data.time) / (1000 * 60);
+
+                // 判斷邏輯優化：
+                // 1. API 明確回傳盤中 (REGULAR)
+                // 2. 對於匯率、原油、VIX 等全天候市場，若報價是近 45 分鐘內更新的活水，強制判定為盤中！
+                // 3. API 若完全沒給狀態，但資料很新 (< 30分)，也視為盤中
+                const is24hMarket = ['TWD=X', 'BZ=F', '^VIX'].includes(sym);
+                const isLive = (data.state === 'REGULAR') || (is24hMarket && diffMins < 45) || (!data.state && diffMins < 30);
+
+                if (isLive) {
+                    stateStr = '盤中';
+                    stateColor = '#549B7B';
+                    stateIcon = '🟢';
+                } else if (data.state === 'PRE' || data.state === 'PREPRE') {
+                    stateStr = '盤前';
+                    stateColor = '#C5A059';
+                    stateIcon = '🟡';
+                } else if (data.state === 'POST') {
+                    stateStr = '盤後';
+                    stateColor = '#3A4A63';
+                    stateIcon = '🔵';
+                }
+
+                timeEl.innerHTML = `<span style="color: ${stateColor}; font-size: 12px; font-weight: 500;">${stateIcon} ${stateStr} ${timeStr}</span>`;
+            }
         }
     }
-    // CNN 指數通常需要特殊 API，此處先給予模擬數值
-    $('mkt-cnn').innerText = "52"; 
-    $('mkt-cnn-chg').innerText = "中性 (Neutral)";
+    
 }
 async function fetchHybridYahooQuotes(symbolsArray) {
     if (symbolsArray.length === 0) return {};
@@ -172,7 +208,8 @@ async function fetchHybridYahooQuotes(symbolsArray) {
                 priceMap[i.symbol] = {
                     price: i.regularMarketPrice,
                     prevClose: i.regularMarketPreviousClose,
-                    time: i.regularMarketTime * 1000
+                    time: i.regularMarketTime * 1000,
+                    state: i.marketState // 🌟 新增：取得 Yahoo 的市場狀態 (REGULAR, CLOSED, PRE 等)
                 };
                 missing = missing.filter(s => s !== i.symbol);
             });
@@ -191,7 +228,8 @@ async function fetchHybridYahooQuotes(symbolsArray) {
                         priceMap[sym] = {
                             price: meta.regularMarketPrice,
                             prevClose: meta.chartPreviousClose,
-                            time: meta.regularMarketTime * 1000
+                            time: meta.regularMarketTime * 1000,
+                            state: 'CLOSED' // 🌟 備用方案抓不到狀態時，預設為收盤
                         };
                         return;
                     }
@@ -286,21 +324,23 @@ const renderStockList = (stocks, isUS) => stocks.map(s => {
     const profitStr = s.isError ? '--' : 'NT$ ' + fmtM(profit * exRate) + ' (' + fmtP(profitPct).replace(/[()%]+/g, '') + '%)';
 
     return `
-                <div class="list-item">
-                    <div class="item-col">
-                        <span class="item-main">${s.symbol}</span>
-                        <span class="item-sub">${fmtMax3(s.shares)} 股</span>
-                    </div>
-                    <div class="item-col text-center">
-                        <span class="item-main ${s.isError ? 'color-down' : ''}">${priceStr}</span>
-                        <span class="item-sub">現價</span>
-                    </div>
-                    <div class="item-col text-right">
-                        <span class="item-main">${netStr}</span>
-                        <span class="item-sub reduced-font">${profitStr}</span>
-                    </div>
-                </div>
-            `;
+        <div class="list-item">
+            <div class="item-col">
+                <span class="item-main">${s.symbol}</span>
+                <span class="item-sub">${fmtMax3(s.shares)} 股</span>
+            </div>
+            <div class="item-col text-center">
+                <span class="item-main ${s.isError ? 'color-down' : ''}">${priceStr}</span>
+                <span class="item-sub">現價</span>
+            </div>
+            <div class="item-col text-right">
+                <span class="item-main">${netStr}</span>
+                <span class="item-sub reduced-font">
+                    <span class="${clr(profit)}">${profitStr}</span>
+                </span>
+            </div>
+        </div>
+    `;
 }).join('');
 
 function generateAllocationBarHtml(stocks, isUS) {
@@ -388,10 +428,10 @@ function updateHeroBanner(v) {
     const isHistory = (v === 'history');
 
     // 1. 更新主標題
-    $('hero-main-title').innerText = (isSt || isTracking) ? '股票資產總淨值' : '總資產淨值';
+    $('hero-main-title').innerText = isSt ? '股票資產總淨值' : '總資產淨值';
 
     // 2. 更新主金額
-    const mainAmount = (isSt || isTracking) ? appData.totals.stockNet : appData.totals.grandNet;
+    const mainAmount = isSt ? appData.totals.stockNet : appData.totals.grandNet;
     animateVal("grand-total", mainAmount);
 
     const subInfo = document.querySelector('.hero-sub-info');
@@ -402,13 +442,13 @@ function updateHeroBanner(v) {
         subInfo.innerHTML = `
             <div><span style="color: #C5A059; font-weight: 600;">台股資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.twNet)}</strong></div>
             <div><span style="color: #D96B6B; font-weight: 600;">美股資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.usNet)}</strong></div>
-            <div><span style="color: #3A4A63; font-weight: 600;">現金部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.cash)}</strong></div>
+            <div><span style="color: #7aa0dd; font-weight: 600;">現金部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.cash)}</strong></div>
         `;
     } else if (isHistory) {
         // 🌟 績效頁面：顯示台股/美股今日損益，文字灰色，數字依漲跌變色
         let twToday = 0;
         let usToday = 0;
-        
+
         appData.twStocks.forEach(s => {
             if (!s.isError && s.prevClose && s.currentPrice) {
                 twToday += (s.currentPrice - s.prevClose) * s.shares;
@@ -426,10 +466,10 @@ function updateHeroBanner(v) {
         `;
     } else {
         // 🌟 預設顯示 (首頁/記帳/編輯)：顯示 總投資成本、總報酬率、今日損益
-        const roi = appData.totals.grandCost === 0 ? 0 : 
-                   ((appData.totals.stockNet - appData.totals.stockCost) / (isSt ? appData.totals.stockCost : appData.totals.grandCost)) * 100;
+        const roi = appData.totals.grandCost === 0 ? 0 :
+            ((appData.totals.stockNet - appData.totals.stockCost) / (isSt ? appData.totals.stockCost : appData.totals.grandCost)) * 100;
         const tp = appData.totals.todayProfit || 0;
-        
+
         subInfo.innerHTML = `
             <div><span>總投資成本</span><strong class="num" id="grand-cost">${fmtM(appData.totals.grandCost)}</strong></div>
             <div><span>總報酬率</span><strong class="num ${clr(roi)}" id="grand-roi">${fmtP(roi)}</strong></div>
@@ -540,35 +580,35 @@ function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
     options.scales.x.grid = options.scales.x.grid || {};
 
     // 3. X 軸標籤顯示邏輯 (只保留 1 號)
-    options.scales.x.ticks.callback = function(value, index, values) {
+    options.scales.x.ticks.callback = function (value, index, values) {
         let labelStr = this.getLabelForValue(value);
         if (labelStr && labelStr.match(/(?:-|\/)0?1$/)) {
             return labelStr; // 顯示 1 號
         }
-        return null; 
+        return null;
     };
-    
-   // 4. 強制字體水平顯示
+
+    // 4. 強制字體水平顯示
     options.scales.x.ticks.autoSkip = false;
     options.scales.x.ticks.maxRotation = 0;
     options.scales.x.ticks.minRotation = 0;
 
     // 5. 網格與輔助線設定 (終極解法)
     options.scales.x.grid.display = true; // 【關鍵】：強制打開 X 軸網格功能 (避免被 getChartOpt 關掉)
-    options.scales.x.grid.drawTicks = true; 
+    options.scales.x.grid.drawTicks = true;
     options.scales.x.grid.tickLength = 6;
     options.scales.x.grid.tickWidth = 2;
-    options.scales.x.grid.drawOnChartArea = true; 
-    
+    options.scales.x.grid.drawOnChartArea = true;
+
     // 使用 function 動態判斷網格線顏色
-    options.scales.x.grid.color = function(context) {
+    options.scales.x.grid.color = function (context) {
         // context.tick.label 會拿到剛剛 tick.callback 決定要顯示的字串
         // 如果有字串 (代表是 1 號)，就給它半透明的線條顏色
         if (context.tick && context.tick.label) {
-            return 'rgba(150, 150, 150, 0.2)'; 
+            return 'rgba(150, 150, 150, 0.2)';
         }
         // 如果沒有字串 (代表是其他日期)，就整條線隱藏 (透明)
-        return 'rgba(0, 0, 0, 0)'; 
+        return 'rgba(0, 0, 0, 0)';
     };
 
     // 6. 建立圖表
@@ -754,16 +794,16 @@ async function saveCash() {
     if (!isNaN(val)) {
         // 1. 更新變更紀錄
         addChangelog('cash', 'TWD', `${appData.cash.toLocaleString()} → ${val.toLocaleString()}`);
-        
+
         // 2. 更新記憶體資料
         appData.cash = val;
-        
+
         // 3. 立即渲染畫面（讓使用者看到數字變動）
         renderApp();
-        
+
         // 4. 【關鍵缺失】將資料同步回雲端
         try {
-            await saveToCloud(); 
+            await saveToCloud();
             showToast('💰 現金已同步至雲端');
         } catch (e) {
             showToast('❌ 雲端儲存失敗，請檢查網路');
@@ -1264,7 +1304,7 @@ async function handleStageTx() {
     stageTx();
 }
 
-// --- 3. 改寫 renderTxView (更新下拉選單結構) ---
+// --- 3. 改寫 renderTxView (更新下拉選單結構與卡片標題) ---
 function renderTxView() {
     const twStocks = appData.twStocks || [];
     const usStocks = appData.usStocks || [];
@@ -1317,11 +1357,17 @@ function renderTxView() {
     allStocks.forEach(s => {
         const stTxs = (appData.transactions || []).filter(t => t.symbol === s.symbol).sort((a, b) => new Date(b.date) - new Date(a.date));
 
+        // 🌟 判斷是台股還是美股，並設定對應顏色的標籤
+        const isTW = twStocks.some(tw => tw.symbol === s.symbol);
+        const marketLabel = isTW
+            ? `<span style="color: #C5A059; margin-right: 8px; font-size: 0.65em;vertical-align: middle">台股</span>`
+            : `<span style="color: #D96B6B; margin-right: 8px; font-size: 0.65em;vertical-align: middle">美股</span>`;
+
         histHtml += `
             <div class="card tx-card" id="tx-card-${s.symbol}">
                 <div class="card-header tx-stock-header cursor-default mb-0" onclick="toggleCard('tx-card-${s.symbol}')">
                     <div>
-                        <h2 class="card-title">${s.symbol}</h2>
+                        <h2 class="card-title">${marketLabel}${s.symbol}</h2>
                         <span class="card-subtitle">總股數: <strong class="num">${fmtMax3(s.shares)}</strong></span>
                     </div>
                     <div style="display:flex; align-items:flex-end;">
