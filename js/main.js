@@ -141,14 +141,14 @@ async function renderInfoView() {
     };
 
     const priceMap = await fetchHybridYahooQuotes(Object.values(symbols));
-    
+
     for (const [id, sym] of Object.entries(symbols)) {
         const data = priceMap[sym];
         if (data) {
             const chg = data.price - data.prevClose;
             const pct = (chg / data.prevClose) * 100;
-            
-            $(`mkt-${id}`).innerText = data.price.toLocaleString(undefined, {minimumFractionDigits: 2});
+
+            $(`mkt-${id}`).innerText = data.price.toLocaleString(undefined, { minimumFractionDigits: 2 });
             $(`mkt-${id}-chg`).innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)} (${fmtP(pct)})`;
             $(`mkt-${id}-chg`).className = `market-chg num ${clr(chg)}`;
 
@@ -157,7 +157,7 @@ async function renderInfoView() {
             if (timeEl) {
                 const d = new Date(data.time);
                 const timeStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-                
+
                 let stateStr = '收盤';
                 let stateColor = '#8A94A6'; // 灰色
                 let stateIcon = '🌑';
@@ -191,7 +191,7 @@ async function renderInfoView() {
             }
         }
     }
-    
+
 }
 async function fetchHybridYahooQuotes(symbolsArray) {
     if (symbolsArray.length === 0) return {};
@@ -244,14 +244,37 @@ async function fetchHybridYahooQuotes(symbolsArray) {
 async function fetchPricesAndRender(forceRefresh = false) {
     const fetchTWSE = async () => {
         if (twseDataMap && !forceRefresh) return;
+
         try {
-            const res = await fetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
+            const symbols = appData.twStocks.map(s => `tse_${s.symbol}.tw`).join('|');
+            if (!symbols) return;
+
+            const apiUrl = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${symbols}&json=1&delay=0&_=${Date.now()}`;
+            const proxyUrl = `${WORKER_URL}${encodeURIComponent(apiUrl)}`;
+
+            const res = await fetch(proxyUrl);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
             const data = await res.json();
+
             twseDataMap = {};
-            data.forEach(s => {
-                if (s.ClosingPrice) twseDataMap[s.Code] = parseFloat(s.ClosingPrice);
-            });
+            let count = 0;
+
+            if (data.msgArray) {
+                data.msgArray.forEach(item => {
+                    if (item.code && (item.z || item.y)) {
+                        const code = item.code.replace(/^tse_|tw$/gi, '');
+                        twseDataMap[code] = parseFloat(item.z) || parseFloat(item.y);
+
+                        // 可新增一個全域 map 存昨日收盤（進階）
+                        // if (item.y) yesterdayMap[code] = parseFloat(item.y);
+                    }
+                });
+            }
+
+            console.log(`✅ MIS 即時更新成功：${count} 檔`);
         } catch (e) {
+            console.error("MIS Proxy 失敗:", e);
             twseDataMap = {};
         }
     };
@@ -264,17 +287,30 @@ async function fetchPricesAndRender(forceRefresh = false) {
 
     const bindPrice = (stock, isUS) => {
         const sym = isUS ? stock.symbol : `${stock.symbol}.TW`;
-        const q = yfData[sym];
-
-        if (q?.prevClose) stock.prevClose = q.prevClose;
+        const q = yfData[sym];   // Yahoo 資料
 
         if (!isUS && twseDataMap?.[stock.symbol]) {
+            // === 台股使用 MIS 即時資料 ===
             stock.currentPrice = twseDataMap[stock.symbol];
             stock.isError = false;
+
+            // 重要修正：從 Yahoo 取得昨日收盤價作為 prevClose
+            if (q?.prevClose) {
+                stock.prevClose = q.prevClose;
+            } else {
+                // 如果 Yahoo 也沒給，改用 MIS 的 y (昨日收盤)
+                // 但目前 MIS 回傳中 y 通常是昨日收盤，可再優化
+            }
+
         } else if (q?.price) {
+            // === 美股或 Yahoo 備援 ===
             stock.currentPrice = q.price;
+            stock.prevClose = q.prevClose || stock.prevClose;   // 保留原有 prevClose
             stock.isError = false;
-            appData.marketTime[isUS ? 'us' : 'tw'] = Math.max(appData.marketTime[isUS ? 'us' : 'tw'] || 0, q.time);
+            appData.marketTime[isUS ? 'us' : 'tw'] = Math.max(
+                appData.marketTime[isUS ? 'us' : 'tw'] || 0,
+                q.time || 0
+            );
         } else {
             stock.isError = true;
         }
@@ -981,96 +1017,7 @@ function clearTxForm() {
     $('tx-date').value = new Date().toISOString().split('T')[0];
 }
 
-function renderTxView() {
-    const allStocks = [...appData.twStocks, ...appData.usStocks];
-    const sel = $('tx-symbol');
 
-    sel.innerHTML = allStocks.length
-        ? allStocks.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('')
-        : '<option value="">請先新增持股</option>';
-
-    if (!$('tx-date').value) $('tx-date').value = new Date().toISOString().split('T')[0];
-
-    renderDraftTxs();
-
-    const histDiv = $('stock-tx-histories');
-    if (!allStocks.length) {
-        return histDiv.innerHTML = '<div class="empty-state">目前無持股可顯示紀錄</div>';
-    }
-
-    const types = { buy: ['買進', 'tag-buy'], sell: ['賣出', 'tag-sell'], div: ['配息', 'tag-div'] };
-    let histHtml = '';
-
-    allStocks.forEach(s => {
-        const stTxs = (appData.transactions || []).filter(t => t.symbol === s.symbol).sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        histHtml += `
-                    <div class="card tx-card" id="tx-card-${s.symbol}">
-                        <div class="card-header tx-stock-header cursor-default mb-0" onclick="toggleCard('tx-card-${s.symbol}')">
-                            <div>
-                                <h2 class="card-title">${s.symbol}</h2>
-                                <span class="card-subtitle">總股數: <strong class="num">${fmtMax3(s.shares)}</strong></span>
-                            </div>
-                            <div style="display:flex; align-items:flex-end;">
-                                <div class="text-right">
-                                    <div class="card-subtitle">均價: <strong class="num">${fmtMax2(s.costPrice)}</strong></div>
-                                    <div class="card-subtitle">總成本: <strong class="num">${fmtMax2(s.costPrice * s.shares)}</strong></div>
-                                </div>
-                                <i class="fa-solid fa-chevron-down tx-expand-icon"></i>
-                            </div>
-                        </div>
-                        <div class="list-container">
-                `;
-
-        if (stTxs.length === 0) {
-            histHtml += '<div style="text-align:center; padding:12px 10px 0; font-size:11px; color:var(--text-muted);">尚無歷史交易紀錄</div>';
-        } else {
-            histHtml += `
-                        <div style="padding-top:8px;">
-                            <div class="tx-grid tx-header">
-                                <div>日期</div><div>動作</div><div class="num text-right">股數</div>
-                                <div class="num text-right">股價</div><div class="num text-right">金額</div><div class="text-right">操作</div>
-                            </div>
-                    `;
-            stTxs.forEach(tx => {
-                const tag = types[tx.type] || ['未知', ''];
-                const isDeleting = draftTxs.some(d => d.action === 'delete' && d.originalTx.id === tx.id);
-                const priceStr = tx.price ? fmtMax2(tx.price) : '-';
-                const costStr = fmtMax2(tx.cost);
-
-                if (isDeleting) {
-                    histHtml += `
-                                <div class="tx-grid tx-deleted">
-                                    <div class="num">${tx.date.substring(5)}</div>
-                                    <div><span class="tx-tag ${tag[1]}">${tag[0]}</span></div>
-                                    <div class="num text-right">${fmtMax3(tx.shares) || '-'}</div>
-                                    <div class="num text-right">${priceStr}</div>
-                                    <div class="num text-right">${costStr}</div>
-                                    <div class="text-right" style="font-size:10px;">待刪</div>
-                                </div>
-                            `;
-                } else {
-                    histHtml += `
-                                <div class="tx-grid">
-                                    <div class="num">${tx.date.substring(5)}</div>
-                                    <div><span class="tx-tag ${tag[1]}">${tag[0]}</span></div>
-                                    <div class="num text-right">${fmtMax3(tx.shares) || '-'}</div>
-                                    <div class="num text-right">${priceStr}</div>
-                                    <div class="num text-right">${costStr}</div>
-                                    <div class="text-right">
-                                        <button class="tx-action-btn" onclick="editDBTx('${tx.id}')" title="修改"><i class="fa-solid fa-pen"></i></button>
-                                        <button class="tx-action-btn" onclick="deleteDBTx('${tx.id}')" title="刪除"><i class="fa-solid fa-trash"></i></button>
-                                    </div>
-                                </div>
-                            `;
-                }
-            });
-            histHtml += `</div>`;
-        }
-        histHtml += `</div></div>`;
-    });
-    histDiv.innerHTML = histHtml;
-}
 
 function renderDraftTxs() {
     const dCard = $('draft-tx-card'), dList = $('draft-tx-list');
