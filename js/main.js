@@ -14,7 +14,8 @@ const appData = {
     netWorthHistory: [],
     transactions: [],
     totals: { grandNet: 0, grandCost: 0, stockNet: 0, stockCost: 0, twNet: 0, usNet: 0 },
-    marketTime: { tw: null, us: null }
+    marketTime: { tw: null, us: null },
+    news: [], // 👉 新增這行用來存放新聞快取
 };
 
 let twseDataMap = null;
@@ -530,9 +531,8 @@ function navTo(target, el) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
 
-    // 2. 切換各分頁內容區塊
-    // 將 'test' 改為 'info'
-    ['dashboard', 'tracking', 'history', 'transactions', 'info'].forEach(t => {
+    // 2. 切換各分頁內容區塊 (👉 新增 'news')
+    ['dashboard', 'tracking', 'history', 'transactions', 'info', 'news'].forEach(t => {
         const contentDiv = $(t + '-content');
         if (contentDiv) {
             contentDiv.classList[target === t ? 'remove' : 'add']('hide');
@@ -542,10 +542,10 @@ function navTo(target, el) {
     // 3. 控制頂部 Banner (Hero Section)
     const heroSection = document.querySelector('.hero-section');
     if (heroSection) {
-        if (target === 'info') {
-            heroSection.classList.add('hide'); // 資訊頁面隱藏 Banner
+        if (target === 'info' || target === 'news') { 
+            heroSection.classList.add('hide'); // 👉 資訊與新聞頁面都隱藏主 Banner
         } else {
-            heroSection.classList.remove('hide'); // 其他頁面顯示 Banner
+            heroSection.classList.remove('hide'); 
             updateHeroBanner(target);
         }
     }
@@ -555,7 +555,12 @@ function navTo(target, el) {
     else if (target === 'history' && !isHistoryLoaded && (appData.twStocks.length > 0 || appData.usStocks.length > 0)) loadHistoryData();
     else if (target === 'tracking') renderTrackingChart();
     else if (target === 'transactions') renderTxView();
-    else if (target === 'info') renderInfoView(); // ⬅️ 加入這一行
+    else if (target === 'info') renderInfoView();
+    else if (target === 'news') {
+        // 👉 如果切換到新聞頁面，且還沒有資料，就去抓資料
+        if (appData.news.length === 0) fetchNewsData();
+        else renderNewsView();
+    }
 }
 
 function toggleCard(id) {
@@ -1354,4 +1359,115 @@ function renderTxView() {
             </div>`;
     });
     histDiv.innerHTML = histHtml;
+}
+// =========================================
+// 新聞模組
+// =========================================
+
+// =========================================
+// 新聞模組 (已修正資料結構解析)
+// =========================================
+
+async function fetchNewsData() {
+    const listDiv = document.querySelector('#news-content .news-list');
+    if (listDiv) listDiv.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 正在從邊緣節點讀取新聞...</div>';
+
+    try {
+        const res = await fetch(`${DB_URL}?type=news`, { 
+            headers: { 'X-Master-Key': SECRET_KEY } 
+        });
+        
+        if (!res.ok) throw new Error('伺服器回應錯誤');
+        
+        const data = await res.json();
+        console.log("【除錯】Worker 回傳的新聞資料：", data); 
+        
+        let allNews = [];
+
+        // 👉 針對新的物件結構進行解析
+        if (data && data.articles) {
+            // 解析匯率新聞 (fx)
+            if (data.articles.fx) {
+                allNews = allNews.concat(data.articles.fx.map(item => ({ ...item, category: 'CURRENCY' })));
+            }
+            // 解析台股新聞 (tw)
+            if (data.articles.tw) {
+                allNews = allNews.concat(data.articles.tw.map(item => ({ ...item, category: 'TW STOCK' })));
+            }
+            // 解析美股新聞 (us)
+            if (data.articles.us) {
+                allNews = allNews.concat(data.articles.us.map(item => ({ ...item, category: 'US STOCK' })));
+            }
+        } else if (Array.isArray(data)) {
+            allNews = data; // 相容備用
+        }
+
+       // 👉 建立嚴格時間防線：現在時間往前推 48 小時
+        const strictTimeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+        // 👉 1. 過濾：只保留大於等於 48 小時前的新聞
+        // 👉 2. 排序：依照發布時間排序 (最新的在最上面)
+        allNews = allNews
+            .filter(item => new Date(item.pubDate) >= strictTimeLimit)
+            .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+        appData.news = allNews;
+        appData.newsUpdatedTime = data.updatedTime || null; // 如果最外層有 updatedTime 就存起來
+        
+        renderNewsView();
+    } catch (e) {
+        console.error("抓取新聞失敗:", e);
+        if (listDiv) listDiv.innerHTML = '<div class="empty-state color-down">讀取新聞失敗，請檢查 API 或是 Worker 設定。</div>';
+    }
+}
+
+function renderNewsView() {
+    const listDiv = document.querySelector('#news-content .news-list');
+    if (!listDiv) return;
+
+    if (!appData.news || appData.news.length === 0) {
+        listDiv.innerHTML = '<div class="empty-state">目前無新聞資料</div>';
+        return;
+    }
+
+    // 👉 更新副標題時間
+    const subtitle = document.querySelector('.news-hero-subtitle');
+    if (subtitle) {
+        // 如果 API 沒給總更新時間，就拿最新的一篇新聞時間代替
+        let timeStr = appData.newsUpdatedTime || appData.news[0].pubDate;
+        let displayTime = '剛剛';
+        
+        if (timeStr) {
+            try {
+                // 將 GMT 格式轉為台灣當地好閱讀的格式 (YYYY/MM/DD HH:mm)
+                const d = new Date(timeStr);
+                displayTime = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            } catch(e) {
+                displayTime = timeStr;
+            }
+        }
+        subtitle.innerHTML = `最後更新：${displayTime}<br>目前使用關鍵字：台股、美股、美元匯率、國際局勢`;
+    }
+
+    // 👉 生成卡片 HTML
+    const cardsHtml = appData.news.map(item => {
+        // 使用解析時賦予的分類，如果沒有才退回預設 BUSINESS
+        const tag = item.category || 'BUSINESS';
+        
+        // 格式化單篇文章的發布時間
+        const itemDate = item.pubDate ? new Date(item.pubDate).toLocaleString('zh-TW', { hour12: false, month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' }) : '';
+
+        return `
+        <div class="news-card">
+            <h2 class="news-card-title" style="font-size: 16px; line-height: 1.4; letter-spacing: 1px;">${item.title}</h2>
+            <span class="news-card-tag">${tag}</span>
+            <div class="news-card-footer" style="margin-top: 15px;">
+                <span class="news-card-date">${itemDate}</span>
+                <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="news-card-link">繼續閱讀..</a>
+            </div>
+        </div>
+        `;
+    }).join('');
+
+    listDiv.innerHTML = cardsHtml;
 }

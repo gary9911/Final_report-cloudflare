@@ -32,6 +32,9 @@
         <div class="nav-item" onclick="navTo('info', this)">
             <i class="fa-solid fa-earth-asia"></i><span>資訊</span>
         </div>
+        <div class="nav-item" onclick="navTo('news', this)">
+            <i class="fa-regular fa-newspaper"></i><span>新聞</span>
+        </div>
     </nav>
     <div class="app-container">
         <header class="hero-section">
@@ -343,6 +346,61 @@
                         <div class="market-chg num" id="mkt-oil-chg">--</div>
                         <div id="mkt-oil-time" style="margin-top: 8px; text-align: center;"></div>
                     </div>
+                </div>
+            </div>
+            <div id="news-content" class="hide">
+                
+                <div class="news-hero">
+                    <img src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=400&auto=format&fit=crop" alt="Breaking News" class="news-hero-img">
+                    <div class="news-hero-text">
+                        <h1 class="news-hero-title">新聞頁面:<br>這裡蒐集了您所關心的主題</h1>
+                        <p class="news-hero-subtitle">目前使用關鍵字：台股、美股、美元匯率、國際局勢</p>
+                        <div class="news-social-icons">
+                            <i class="fa-brands fa-facebook"></i>
+                            <i class="fa-brands fa-twitter"></i>
+                            <i class="fa-brands fa-instagram"></i>
+                            <i class="fa-brands fa-linkedin"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="news-divider">
+                    <div class="news-divider-yellow"></div>
+                    <div class="news-divider-purple"></div>
+                </div>
+
+                <div class="news-list">
+                    
+                    <div class="news-card">
+                        <h2 class="news-card-title">台股</h2>
+                        <span class="news-card-tag">BUSINESS</span>
+                        <div class="news-card-content">content</div>
+                        <div class="news-card-footer">
+                            <span class="news-card-date">更新日期：XX年XX月XX日 12:25</span>
+                            <a href="#" class="news-card-link">繼續閱讀..</a>
+                        </div>
+                    </div>
+
+                    <div class="news-card">
+                        <h2 class="news-card-title">美股</h2>
+                        <span class="news-card-tag">BUSINESS</span>
+                        <div class="news-card-content">content</div>
+                        <div class="news-card-footer">
+                            <span class="news-card-date">更新日期：XX年XX月XX日 12:25</span>
+                            <a href="#" class="news-card-link">繼續閱讀..</a>
+                        </div>
+                    </div>
+
+                    <div class="news-card">
+                        <h2 class="news-card-title">美元匯率</h2>
+                        <span class="news-card-tag">BUSINESS</span>
+                        <div class="news-card-content">content</div>
+                        <div class="news-card-footer">
+                            <span class="news-card-date">更新日期：XX年XX月XX日 12:25</span>
+                            <a href="#" class="news-card-link">繼續閱讀..</a>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </main>
