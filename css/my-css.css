@@ -414,11 +414,11 @@ h3 {
     font-size: 9px;
     color: var(--text-muted);
     letter-spacing: 1px;
-    font-weight: 600;
+    font-weight: 100;
 }
 
 .edit-input {
-    width: 100%;
+    width: 97%;
     border: 1.5px solid var(--border-light);
     border-radius: 8px;
     padding: 7px 9px;
@@ -1190,4 +1190,33 @@ h3 {
 
 .news-card-link:hover {
     color: #F3C95A;
+}
+
+.app-container {
+    position: relative; /* 確保內部絕對定位基準點正確 */
+}
+
+.global-refresh-btn {
+    position: absolute;
+    top: 40px;    /* 距離頂部的高度，可依喜好微調 */
+    right: 35px;  /* 距離右側的寬度 */
+    z-index: 99;  /* 確保永遠顯示在最上層 */
+    color: #c5aa798d; /* 指揮中心專屬金 */
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px;
+    transition: opacity 0.1s;
+}
+
+.global-refresh-btn:active {
+    opacity: 0.5; /* 點擊時的視覺回饋 */
+}
+
+/* 讀取時的旋轉動畫 */
+#syncBtn.spin {
+    animation: spin-anim 0.5s linear infinite;
+}
+
+@keyframes spin-anim {
+    100% { transform: rotate(360deg); }
 }
