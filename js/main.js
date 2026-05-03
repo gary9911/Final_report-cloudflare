@@ -16,6 +16,7 @@ const appData = {
     totals: { grandNet: 0, grandCost: 0, stockNet: 0, stockCost: 0, twNet: 0, usNet: 0 },
     marketTime: { tw: null, us: null },
     news: [], // 👉 新增這行用來存放新聞快取
+    benchmarkData: null,
 };
 
 let twseDataMap = null;
@@ -138,7 +139,9 @@ async function renderInfoView() {
         'txf': 'EWT',     // 台指期夜盤替代指標
         'twdx': 'TWD=X',  // USD/TWD
         'vix': '^VIX',    // VIX 指數
-        'oil': 'BZ=F'     // Brent 原油
+        'oil': 'BZ=F',     // Brent 原油
+        'tsm': 'TSM',
+        'tnx': '^TNX'
     };
 
     const priceMap = await fetchHybridYahooQuotes(Object.values(symbols));
@@ -542,10 +545,10 @@ function navTo(target, el) {
     // 3. 控制頂部 Banner (Hero Section)
     const heroSection = document.querySelector('.hero-section');
     if (heroSection) {
-        if (target === 'info' || target === 'news') { 
+        if (target === 'info' || target === 'news') {
             heroSection.classList.add('hide'); // 👉 資訊與新聞頁面都隱藏主 Banner
         } else {
-            heroSection.classList.remove('hide'); 
+            heroSection.classList.remove('hide');
             updateHeroBanner(target);
         }
     }
@@ -605,71 +608,81 @@ const getChartOpt = () => ({
     }
 });
 
-// 🌟 Chart.js 優化：若存在實例，直接銷毀重建，避免記憶體洩漏
-function drawLineChart(chartInstance, ctxId, labels, data, label, color, bg) {
+// 🌟 Chart.js 優化：支援多條折線與多重獨立 Y 軸
+// 🌟 Chart.js 優化：支援多條折線與多重獨立 Y 軸
+function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
     if (chartInstance) chartInstance.destroy();
     const ctx = $(ctxId);
     if (!ctx) return null;
 
-    // 1. 取得預設的圖表選項
     const options = getChartOpt();
 
-    // 2. 確保 scales 的物件結構存在
+    // 確保 scales 結構存在
     options.scales = options.scales || {};
-    options.scales.x = options.scales.x || {};
-    options.scales.x.ticks = options.scales.x.ticks || {};
-    options.scales.x.grid = options.scales.x.grid || {};
+    options.scales.x = options.scales.x || { ticks: {}, grid: {} };
 
-    // 3. X 軸標籤顯示邏輯 (只保留 1 號)
     options.scales.x.ticks.callback = function (value, index, values) {
         let labelStr = this.getLabelForValue(value);
-        if (labelStr && labelStr.match(/(?:-|\/)0?1$/)) {
-            return labelStr; // 顯示 1 號
-        }
+        if (labelStr && labelStr.match(/(?:-|\/)0?1$/)) return labelStr;
         return null;
     };
-
-    // 4. 強制字體水平顯示
     options.scales.x.ticks.autoSkip = false;
     options.scales.x.ticks.maxRotation = 0;
     options.scales.x.ticks.minRotation = 0;
 
-    // 5. 網格與輔助線設定 (終極解法)
-    options.scales.x.grid.display = true; // 【關鍵】：強制打開 X 軸網格功能 (避免被 getChartOpt 關掉)
+    options.scales.x.grid.display = true;
     options.scales.x.grid.drawTicks = true;
     options.scales.x.grid.tickLength = 6;
     options.scales.x.grid.tickWidth = 2;
     options.scales.x.grid.drawOnChartArea = true;
-
-    // 使用 function 動態判斷網格線顏色
     options.scales.x.grid.color = function (context) {
-        // context.tick.label 會拿到剛剛 tick.callback 決定要顯示的字串
-        // 如果有字串 (代表是 1 號)，就給它半透明的線條顏色
-        if (context.tick && context.tick.label) {
-            return 'rgba(150, 150, 150, 0.2)';
-        }
-        // 如果沒有字串 (代表是其他日期)，就整條線隱藏 (透明)
+        if (context.tick && context.tick.label) return 'rgba(150, 150, 150, 0.2)';
         return 'rgba(0, 0, 0, 0)';
     };
 
-    // 6. 建立圖表
+    // 👉 新增：如果有多條走勢線 (大於 1 條)，就在右上角顯示小字圖例
+    if (datasetsConfig.length > 1) {
+        options.plugins.legend = {
+            display: true,
+            position: 'top',
+            align: 'end', // 靠右對齊
+            labels: {
+                boxWidth: 5,      // 讓顏色標示變小
+                boxHeight: 5,
+                usePointStyle: true, // 變成質感小圓點
+                font: { size: 10, family: 'Inter' }, // 字體縮小
+                color: '#8A94A6'  // 圖例文字顏色 (深灰色)
+            }
+        };
+    } else {
+        options.plugins.legend = { display: false };
+    }
+
+    // 動態產生 datasets 陣列
+    const chartDatasets = datasetsConfig.map(ds => ({
+        label: ds.label,
+        data: ds.data,
+        borderColor: ds.color,
+        backgroundColor: ds.bg,
+        borderWidth: ds.isBenchmark ? 1 : 2,
+        pointBackgroundColor: '#cddef404',
+        pointBorderColor: ds.color,
+        pointRadius: ds.isBenchmark ? 0 : 0,
+        fill: ds.bg !== 'transparent',
+        tension: 0, // 👉 修改：從 0.5 改為 0，讓所有線條變成筆直的轉折，不再彎曲
+        yAxisID: ds.yAxisID || 'y'
+    }));
+
+    // 動態加入副 Y 軸
+    datasetsConfig.forEach(ds => {
+        if (ds.yAxisID && ds.yAxisID !== 'y') {
+            options.scales[ds.yAxisID] = { type: 'linear', display: false };
+        }
+    });
+
     return new Chart(ctx, {
         type: 'line',
-        data: {
-            labels,
-            datasets: [{
-                label,
-                data,
-                borderColor: color,
-                backgroundColor: bg,
-                borderWidth: 2,
-                pointBackgroundColor: '#1A2436',
-                pointBorderColor: color,
-                pointRadius: 2,
-                fill: true,
-                tension: 0.5
-            }]
-        },
+        data: { labels, datasets: chartDatasets },
         options: options
     });
 }
@@ -702,7 +715,8 @@ function renderAllocationChart() {
     }
 }
 
-function renderTrackingChart() {
+// 渲染追蹤分頁圖表 (已實現總資產與股票資產的個別基準對齊)
+async function renderTrackingChart() {
     animateVal("tracking-stock-total", appData.totals.stockNet);
     animateVal("tracking-cash-total", appData.cash);
     const hist = appData.netWorthHistory || [];
@@ -718,7 +732,6 @@ function renderTrackingChart() {
         return;
     }
 
-    // 確保 Canvas 存在 (移除 Empty 狀態)
     ['netWorthChart', 'stockNetChart', 'cashNetChart'].forEach(id => {
         const canvas = $(id);
         if (canvas && canvas.style.display === 'none') {
@@ -735,9 +748,92 @@ function renderTrackingChart() {
     const stockData = hist.map(i => i.stockNet || (i.grandNet - (i.cash || 0)));
     const cashData = hist.map(i => i.cash);
 
-    chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwData, '總資產', '#C5A059', 'rgba(197,160,89,0.1)');
-    chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockData, '股票資產', '#549B7B', 'rgba(84,155,123,0.1)');
-    chartInst.cash = drawLineChart(chartInst.cash, 'cashNetChart', lbls, cashData, '現金', '#3A4A63', 'rgba(58,74,99,0.1)');
+    // 1. 準備基礎線條
+    let nwDatasets = [
+        { label: '總資產', data: nwData, color: '#C5A059', bg: 'rgba(197,160,89,0.1)' }
+    ];
+    let stockDatasets = [
+        { label: '股票資產', data: stockData, color: '#549B7B', bg: 'rgba(84,155,123,0.1)' }
+    ];
+
+    chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwDatasets);
+    chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockDatasets);
+    chartInst.cash = drawLineChart(chartInst.cash, 'cashNetChart', lbls, [
+        { label: '現金', data: cashData, color: '#3A4A63', bg: 'rgba(58,74,99,0.1)' }
+    ]);
+
+    // 2. 呼叫 API 並進行個別定錨基準化
+    const bench = await fetchBenchmarkData();
+    if (bench && bench['006208'].length > 0 && bench['SPY'].length > 0) {
+        
+        const matchPrice = (targetDateStr, benchHistory) => {
+            const targetTime = new Date(targetDateStr).getTime();
+            let closest = benchHistory[0]?.price || 0;
+            for (let b of benchHistory) {
+                if (b.time <= targetTime + 86400000) closest = b.price;
+                else break;
+            }
+            return closest;
+        };
+
+        const rawData6208 = hist.map(i => matchPrice(i.date, bench['006208']));
+        const rawDataSPY = hist.map(i => matchPrice(i.date, bench['SPY']));
+
+        // 🌟 關鍵邏輯：尋找 3/17 的索引
+        let baseIndex = lbls.findIndex(l => l.includes('-03-17'));
+        if (baseIndex === -1) baseIndex = 0; 
+
+        // 👉 設定不同的定錨金額
+        const nwTargetAmount = 4756878;   // 總資產定錨
+        const stockTargetAmount = 2650517; // 股票資產定錨
+
+        // 基準化計算函數
+        const normalize = (rawData, targetAmt) => {
+            const basePrice = rawData[baseIndex] || rawData[0];
+            if (!basePrice) return rawData;
+            return rawData.map(price => (price / basePrice) * targetAmt);
+        };
+
+        // 3. 將大盤線條加入總資產圖表 (對齊 4,756,878)
+        nwDatasets.push({
+            label: '006208 (對比總資產)',
+            data: normalize(rawData6208, nwTargetAmount),
+            color: 'rgba(243, 156, 18, 0.7)',
+            bg: 'transparent',
+            yAxisID: 'y',
+            isBenchmark: true
+        });
+        nwDatasets.push({
+            label: 'SPY (對比總資產)',
+            data: normalize(rawDataSPY, nwTargetAmount),
+            color: 'rgba(155, 89, 182, 0.7)',
+            bg: 'transparent',
+            yAxisID: 'y',
+            isBenchmark: true
+        });
+
+        // 4. 將大盤線條加入股票資產圖表 (對齊 2,650,517)
+        stockDatasets.push({
+            label: '006208 (對比股票)',
+            data: normalize(rawData6208, stockTargetAmount),
+            color: 'rgba(243, 156, 18, 0.7)',
+            bg: 'transparent',
+            yAxisID: 'y',
+            isBenchmark: true
+        });
+        stockDatasets.push({
+            label: 'SPY (對比股票)',
+            data: normalize(rawDataSPY, stockTargetAmount),
+            color: 'rgba(155, 89, 182, 0.7)',
+            bg: 'transparent',
+            yAxisID: 'y',
+            isBenchmark: true
+        });
+
+        // 5. 最終渲染
+        chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwDatasets);
+        chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockDatasets);
+    }
 }
 
 async function saveCurrentNetWorth() {
@@ -1360,6 +1456,28 @@ function renderTxView() {
     });
     histDiv.innerHTML = histHtml;
 }
+async function fetchBenchmarkData() {
+    if (appData.benchmarkData) return appData.benchmarkData;
+    try {
+        const px = url => `${WORKER_URL}${encodeURIComponent(url)}`;
+        const fetchSym = async (sym) => {
+            const res = await fetch(px(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=2y`));
+            if (!res.ok) return [];
+            const json = await res.json();
+            const result = json.chart.result[0];
+            const timestamps = result.timestamp;
+            const closes = result.indicators.quote[0].close;
+            // 轉換為 { time, price } 的陣列
+            return timestamps.map((t, i) => ({ time: t * 1000, price: closes[i] })).filter(d => d.price != null);
+        };
+        const [twData, usData] = await Promise.all([fetchSym('006208.TW'), fetchSym('SPY')]);
+        appData.benchmarkData = { '006208': twData, 'SPY': usData };
+        return appData.benchmarkData;
+    } catch (e) {
+        console.error("抓取基準線資料失敗", e);
+        return null;
+    }
+}
 // =========================================
 // 新聞模組
 // =========================================
@@ -1373,15 +1491,15 @@ async function fetchNewsData() {
     if (listDiv) listDiv.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 正在從邊緣節點讀取新聞...</div>';
 
     try {
-        const res = await fetch(`${DB_URL}?type=news`, { 
-            headers: { 'X-Master-Key': SECRET_KEY } 
+        const res = await fetch(`${DB_URL}?type=news`, {
+            headers: { 'X-Master-Key': SECRET_KEY }
         });
-        
+
         if (!res.ok) throw new Error('伺服器回應錯誤');
-        
+
         const data = await res.json();
-        console.log("【除錯】Worker 回傳的新聞資料：", data); 
-        
+        console.log("【除錯】Worker 回傳的新聞資料：", data);
+
         let allNews = [];
 
         // 👉 針對新的物件結構進行解析
@@ -1402,7 +1520,7 @@ async function fetchNewsData() {
             allNews = data; // 相容備用
         }
 
-       // 👉 建立嚴格時間防線：現在時間往前推 48 小時
+        // 👉 建立嚴格時間防線：現在時間往前推 48 小時
         const strictTimeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
         // 👉 1. 過濾：只保留大於等於 48 小時前的新聞
@@ -1413,7 +1531,7 @@ async function fetchNewsData() {
 
         appData.news = allNews;
         appData.newsUpdatedTime = data.updatedTime || null; // 如果最外層有 updatedTime 就存起來
-        
+
         renderNewsView();
     } catch (e) {
         console.error("抓取新聞失敗:", e);
@@ -1436,13 +1554,13 @@ function renderNewsView() {
         // 如果 API 沒給總更新時間，就拿最新的一篇新聞時間代替
         let timeStr = appData.newsUpdatedTime || appData.news[0].pubDate;
         let displayTime = '剛剛';
-        
+
         if (timeStr) {
             try {
                 // 將 GMT 格式轉為台灣當地好閱讀的格式 (YYYY/MM/DD HH:mm)
                 const d = new Date(timeStr);
                 displayTime = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-            } catch(e) {
+            } catch (e) {
                 displayTime = timeStr;
             }
         }
@@ -1453,9 +1571,9 @@ function renderNewsView() {
     const cardsHtml = appData.news.map(item => {
         // 使用解析時賦予的分類，如果沒有才退回預設 BUSINESS
         const tag = item.category || 'BUSINESS';
-        
+
         // 格式化單篇文章的發布時間
-        const itemDate = item.pubDate ? new Date(item.pubDate).toLocaleString('zh-TW', { hour12: false, month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' }) : '';
+        const itemDate = item.pubDate ? new Date(item.pubDate).toLocaleString('zh-TW', { hour12: false, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
         return `
         <div class="news-card">
