@@ -37,12 +37,15 @@
         </div>
     </nav>
     <div class="app-container">
+        
+        <div class="global-refresh-btn" onclick="refreshData(true); if(currentTab === 'news') fetchNewsData();">
+            <i class="fa-solid fa-arrow-rotate-right" id="syncBtn"></i>
+        </div>
+
         <header class="hero-section">
-            <div class="sync-btn-wrapper">
-                <button class="sync-btn" id="syncBtn" onclick="refreshData(true)">⟳</button>
-            </div>
             <div class="hero-title" id="hero-main-title">總資產淨值</div>
             <div class="hero-amount"><span class="currency">NT$</span><span class="num" id="grand-total">0</span></div>
+            
             <div class="hero-sub-info">
                 <div><span>總投資成本</span><strong class="num" id="grand-cost">0</strong></div>
                 <div><span>總報酬率</span><strong class="num color-up" id="grand-roi">+0.00%</strong></div>
@@ -345,6 +348,18 @@
                         <div class="market-val num" id="mkt-oil">--</div>
                         <div class="market-chg num" id="mkt-oil-chg">--</div>
                         <div id="mkt-oil-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">台積電 ADR</div>
+                        <div class="market-val num" id="mkt-tsm">--</div>
+                        <div class="market-chg num" id="mkt-tsm-chg">--</div>
+                        <div id="mkt-tsm-time" style="margin-top: 8px; text-align: center;"></div>
+                    </div>
+                    <div class="market-card">
+                        <div class="card-label">美債 10Y 殖利率</div>
+                        <div class="market-val num" id="mkt-tnx">--</div>
+                        <div class="market-chg num" id="mkt-tnx-chg">--</div>
+                        <div id="mkt-tnx-time" style="margin-top: 8px; text-align: center;"></div>
                     </div>
                 </div>
             </div>
