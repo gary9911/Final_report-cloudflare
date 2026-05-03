@@ -1,0 +1,21 @@
+{
+  "name": "高奢菁英 | 總資產指揮中心 V25",
+  "short_name": "資產中心",
+  "description": "個人總資產追蹤與記帳指揮中心",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#FDFCF8",
+  "theme_color": "#FDFCF8",
+  "icons": [
+    {
+      "src": "icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -5,104 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>高奢菁英 | 總資產指揮中心 V25</title>
-
+    <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#FDFCF8">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="資產中心">
-    <meta name="mobile-web-app-capable" content="yes">
-
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="stylesheet" href="css/all.min.css">
     <link rel="stylesheet" href="css/my-css.css">
-
-    <style>
-        .cursor-default {
-            cursor: default;
-        }
-
-        .mb-0 {
-            margin-bottom: 0px !important;
-        }
-
-        .mt-10 {
-            margin-top: 10px;
-        }
-
-        .pb-8 {
-            padding-bottom: 8px;
-        }
-
-        .pb-12 {
-            padding-bottom: 12px;
-        }
-
-        .align-center {
-            align-items: center;
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .text-right {
-            text-align: right;
-        }
-
-        .flex-nowrap {
-            flex-wrap: nowrap;
-        }
-
-        .flex-07 {
-            flex: 0.7;
-        }
-
-        .flex-11 {
-            flex: 1.1;
-        }
-
-        .hero-amount-large {
-            font-size: 38px;
-            margin-bottom: 8px;
-        }
-
-        .currency-mid {
-            font-size: 20px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-
-        .chart-empty {
-            text-align: center;
-            padding: 50px 0;
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-
-        .tx-deleted {
-            opacity: 0.4;
-            text-decoration: line-through;
-        }
-
-        .tx-added-text {
-            color: var(--down-green);
-            font-weight: 700;
-        }
-
-        .tx-deleted-text {
-            color: var(--up-red);
-            font-weight: 700;
-        }
-
-        .symbol-mini {
-            font-size: 9px;
-            font-weight: 600;
-        }
-    </style>
 </head>
 
 <body>
@@ -213,7 +123,6 @@
                             id="tracking-stock-total">0</span>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="card-header cursor-default pb-8">
                         <div class="card-title-group">
@@ -231,7 +140,6 @@
                             id="tracking-cash-total">0</span>
                     </div>
                 </div>
-
                 <div class="card">
                     <div class="card-header cursor-default pb-8">
                         <div class="card-title-group">
@@ -242,7 +150,6 @@
                     <div class="chart-container" id="cs-box"><canvas id="cashNetChart"></canvas></div>
                 </div>
             </div>
-
             <div id="history-content" class="hide">
                 <div class="history-controls">
                     <button class="hero-btn" onclick="setHeroMode('d1Pct', this)">日漲跌%</button>
@@ -265,7 +172,6 @@
                     </div>
                 </div>
             </div>
-
             <div id="edit-content" class="hide">
                 <div class="cloud-status" id="cloud-status">
                     <div class="dot"></div><span id="cloud-status-text">尚未連線</span>
@@ -307,7 +213,6 @@
                             <span class="card-subtitle">選擇現有標的或直接建立新監控</span>
                         </div>
                     </div>
-
                     <div class="form-row">
                         <div class="form-col">
                             <span class="edit-label">標的代號</span>
@@ -378,7 +283,6 @@
                         <button class="btn-half btn-stage" onclick="handleStageTx()">寫入暫存</button>
                     </div>
                 </div>
-
                 <div class="card hide" id="draft-tx-card">
                     <div class="card-header cursor-default pb-8">
                         <h2 class="card-title">暫存確認區</h2>
@@ -397,13 +301,11 @@
                 </div>
                 <div id="stock-tx-histories"></div>
             </div>
-
             <div id="info-content" class="hide">
                 <div class="market-header">
                     <div class="market-subtitle">MARKET DASHBOARD</div>
                     <h1 class="market-title">全球市場監控</h1>
                 </div>
-
                 <div class="market-grid">
                     <div class="market-card">
                         <div class="card-label">台灣大盤</div>
@@ -441,7 +343,6 @@
                         <div class="market-chg num" id="mkt-oil-chg">--</div>
                         <div id="mkt-oil-time" style="margin-top: 8px; text-align: center;"></div>
                     </div>
-                    
                 </div>
             </div>
         </main>
@@ -450,7 +351,6 @@
     </div>
     <script src="js/chart.js"></script>
     <script src="js/main.js"></script>
-
 </body>
 
 </html>
