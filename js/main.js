@@ -1,4 +1,3 @@
-
 const WORKER_URL = 'https://proxy-gary0417.gary9911.workers.dev/?url=';
 const DB_URL = 'https://proxy-gary0417.gary9911.workers.dev/';
 const SECRET_KEY = 'MySuperSecretWealth2026';
@@ -15,7 +14,7 @@ const appData = {
     transactions: [],
     totals: { grandNet: 0, grandCost: 0, stockNet: 0, stockCost: 0, twNet: 0, usNet: 0 },
     marketTime: { tw: null, us: null },
-    news: [], // 👉 新增這行用來存放新聞快取
+    news: [],
     benchmarkData: null,
 };
 
@@ -28,9 +27,9 @@ let chartInst = { allocation: null, nw: null, stock: null, cash: null };
 const changelog = [];
 let draftTxs = [];
 
-const fmtM = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });     // 整數金額
-const fmtMax2 = n => n.toLocaleString('en-US', { maximumFractionDigits: 2 });  // 小數點2位 (金額/均價)
-const fmtMax3 = n => n.toLocaleString('en-US', { maximumFractionDigits: 3 });  // 小數點3位 (股數)
+const fmtM = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+const fmtMax2 = n => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+const fmtMax3 = n => n.toLocaleString('en-US', { maximumFractionDigits: 3 });
 const fmtP = n => (n > 0 ? '+' : '') + n.toFixed(2) + '%';
 const clr = n => n > 0 ? 'color-up' : (n < 0 ? 'color-down' : '');
 
@@ -132,16 +131,19 @@ async function saveToCloud() {
         $('saveCloudBtn').innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存至邊緣金庫';
     }
 }
+
+// 🌟 資訊頁面渲染核心 (含富台指現貨修正與盤中時間)
 async function renderInfoView() {
     const symbols = {
-        'twii': '^TWII',  // 台灣大盤
-        'gspc': '^GSPC',  // S&P 500
-        'txf': 'EWT',     // 台指期夜盤替代指標
-        'twdx': 'TWD=X',  // USD/TWD
-        'vix': '^VIX',    // VIX 指數
-        'oil': 'BZ=F',     // Brent 原油
+        'twii': '^TWII',
+        'gspc': '^GSPC',
+        'txf': 'EWT',
+        'twdx': 'TWD=X',
+        'vix': '^VIX',
+        'oil': 'BZ=F',
         'tsm': 'TSM',
-        'tnx': '^TNX'
+        'tnx': '^TNX',
+        'futw': 'FTCRTWNT.FGI'   // ✅ 改抓富台指底層現貨，解決 API 空白問題
     };
 
     const priceMap = await fetchHybridYahooQuotes(Object.values(symbols));
@@ -152,28 +154,26 @@ async function renderInfoView() {
             const chg = data.price - data.prevClose;
             const pct = (chg / data.prevClose) * 100;
 
-            $(`mkt-${id}`).innerText = data.price.toLocaleString(undefined, { minimumFractionDigits: 2 });
-            $(`mkt-${id}-chg`).innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)} (${fmtP(pct)})`;
-            $(`mkt-${id}-chg`).className = `market-chg num ${clr(chg)}`;
+            const valEl = id === 'futw' ? $('info-futw-val') : $(`mkt-${id}`);
+            const chgEl = id === 'futw' ? $('info-futw-chg') : $(`mkt-${id}-chg`);
+            const timeEl = id === 'futw' ? $('info-futw-time') : $(`mkt-${id}-time`); // ✅ 支援富台指時間綁定
 
-            // 🌟 新增：處理時間與盤中/收盤狀態
-            const timeEl = $(`mkt-${id}-time`);
+            if (valEl) valEl.innerText = data.price.toLocaleString(undefined, { minimumFractionDigits: 2 });
+            if (chgEl) {
+                chgEl.innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)} (${fmtP(pct)})`;
+                chgEl.className = `market-chg num ${clr(chg)}`;
+            }
+
             if (timeEl) {
                 const d = new Date(data.time);
                 const timeStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
                 let stateStr = '收盤';
-                let stateColor = '#8A94A6'; // 灰色
+                let stateColor = '#8A94A6';
                 let stateIcon = '🌑';
 
-                // 🌟 核心修正：計算報價時間與「現在時間」的差距 (分鐘)
                 const now = new Date().getTime();
                 const diffMins = Math.abs(now - data.time) / (1000 * 60);
-
-                // 判斷邏輯優化：
-                // 1. API 明確回傳盤中 (REGULAR)
-                // 2. 對於匯率、原油、VIX 等全天候市場，若報價是近 45 分鐘內更新的活水，強制判定為盤中！
-                // 3. API 若完全沒給狀態，但資料很新 (< 30分)，也視為盤中
                 const is24hMarket = ['TWD=X', 'BZ=F', '^VIX'].includes(sym);
                 const isLive = (data.state === 'REGULAR') || (is24hMarket && diffMins < 45) || (!data.state && diffMins < 30);
 
@@ -196,7 +196,73 @@ async function renderInfoView() {
         }
     }
 
+    await fetchInstitutionalData();
 }
+
+// 🌟 三大法人動態抓取核心 (含精確日期解析)
+async function fetchInstitutionalData() {
+    try {
+        const apiUrl = `https://www.twse.com.tw/fund/BFI82U?response=json&type=day&_=${Date.now()}`;
+        const proxyUrl = `${WORKER_URL}${encodeURIComponent(apiUrl)}`;
+
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error('無法取得證交所資料');
+
+        const json = await res.json();
+        if (json.stat !== 'OK' || !json.data) throw new Error('三大法人資料格式異常');
+
+        // ✅ 解析官方傳回的結算日期
+        let reportDate = "最新交易日";
+        if (json.date && json.date.length === 8) {
+            reportDate = `${json.date.substring(0, 4)}/${json.date.substring(4, 6)}/${json.date.substring(6, 8)}`;
+        }
+
+        const parseToYi = (str) => {
+            const num = parseInt(str.replace(/,/g, ''), 10);
+            return num / 100000000;
+        };
+
+        let dealer = 0, trust = 0, foreign = 0;
+
+        json.data.forEach(row => {
+            const name = row[0];
+            const netVal = parseToYi(row[3]);
+
+            if (name.includes('自營商(自行買賣)') || name.includes('自營商(避險)')) {
+                dealer += netVal;
+            } else if (name.includes('投信')) {
+                trust = netVal;
+            } else if (name.includes('外資及陸資') || name.includes('外資自營商')) {
+                foreign += netVal;
+            }
+        });
+
+        const updateChipCard = (elementId, dateId, value) => {
+            const el = $(elementId);
+            const dateEl = $(dateId);
+            if (!el) return;
+
+            const displayStr = value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1);
+            el.textContent = displayStr;
+            el.className = 'market-val num ' + (value > 0 ? 'color-up' : (value < 0 ? 'color-down' : ''));
+
+            if (dateEl) {
+                dateEl.textContent = reportDate;
+            }
+        };
+
+        updateChipCard('info-foreign-val', 'info-foreign-date', foreign);
+        updateChipCard('info-trust-val', 'info-trust-date', trust);
+        updateChipCard('info-dealer-val', 'info-dealer-date', dealer);
+
+    } catch (error) {
+        console.error('抓取籌碼資料失敗:', error);
+        ['info-foreign-val', 'info-trust-val', 'info-dealer-val'].forEach(id => {
+            if ($(id)) $(id).textContent = '暫無資料';
+        });
+    }
+}
+
 async function fetchHybridYahooQuotes(symbolsArray) {
     if (symbolsArray.length === 0) return {};
     const priceMap = {};
@@ -213,7 +279,7 @@ async function fetchHybridYahooQuotes(symbolsArray) {
                     price: i.regularMarketPrice,
                     prevClose: i.regularMarketPreviousClose,
                     time: i.regularMarketTime * 1000,
-                    state: i.marketState // 🌟 新增：取得 Yahoo 的市場狀態 (REGULAR, CLOSED, PRE 等)
+                    state: i.marketState
                 };
                 missing = missing.filter(s => s !== i.symbol);
             });
@@ -233,7 +299,7 @@ async function fetchHybridYahooQuotes(symbolsArray) {
                             price: meta.regularMarketPrice,
                             prevClose: meta.chartPreviousClose,
                             time: meta.regularMarketTime * 1000,
-                            state: 'CLOSED' // 🌟 備用方案抓不到狀態時，預設為收盤
+                            state: 'CLOSED'
                         };
                         return;
                     }
@@ -244,7 +310,6 @@ async function fetchHybridYahooQuotes(symbolsArray) {
     return priceMap;
 }
 
-// 🌟 新增 forceRefresh 參數，強制重抓台股資料
 async function fetchPricesAndRender(forceRefresh = false) {
     const fetchTWSE = async () => {
         if (twseDataMap && !forceRefresh) return;
@@ -262,21 +327,15 @@ async function fetchPricesAndRender(forceRefresh = false) {
             const data = await res.json();
 
             twseDataMap = {};
-            let count = 0;
 
             if (data.msgArray) {
                 data.msgArray.forEach(item => {
                     if (item.code && (item.z || item.y)) {
                         const code = item.code.replace(/^tse_|tw$/gi, '');
                         twseDataMap[code] = parseFloat(item.z) || parseFloat(item.y);
-
-                        // 可新增一個全域 map 存昨日收盤（進階）
-                        // if (item.y) yesterdayMap[code] = parseFloat(item.y);
                     }
                 });
             }
-
-            console.log(`✅ MIS 即時更新成功：${count} 檔`);
         } catch (e) {
             console.error("MIS Proxy 失敗:", e);
             twseDataMap = {};
@@ -291,25 +350,17 @@ async function fetchPricesAndRender(forceRefresh = false) {
 
     const bindPrice = (stock, isUS) => {
         const sym = isUS ? stock.symbol : `${stock.symbol}.TW`;
-        const q = yfData[sym];   // Yahoo 資料
+        const q = yfData[sym];
 
         if (!isUS && twseDataMap?.[stock.symbol]) {
-            // === 台股使用 MIS 即時資料 ===
             stock.currentPrice = twseDataMap[stock.symbol];
             stock.isError = false;
-
-            // 重要修正：從 Yahoo 取得昨日收盤價作為 prevClose
             if (q?.prevClose) {
                 stock.prevClose = q.prevClose;
-            } else {
-                // 如果 Yahoo 也沒給，改用 MIS 的 y (昨日收盤)
-                // 但目前 MIS 回傳中 y 通常是昨日收盤，可再優化
             }
-
         } else if (q?.price) {
-            // === 美股或 Yahoo 備援 ===
             stock.currentPrice = q.price;
-            stock.prevClose = q.prevClose || stock.prevClose;   // 保留原有 prevClose
+            stock.prevClose = q.prevClose || stock.prevClose;
             stock.isError = false;
             appData.marketTime[isUS ? 'us' : 'tw'] = Math.max(
                 appData.marketTime[isUS ? 'us' : 'tw'] || 0,
@@ -440,7 +491,10 @@ function renderApp() {
     appData.totals.todayProfit = fastTodayProfit;
 
     updateHeroBanner(currentTab);
-    if (currentTab === 'dashboard') renderAllocationChart();
+    if (currentTab === 'dashboard') {
+        renderAllocationChart();
+        renderDistributionCharts();
+    }
 
     animateVal("tw-net", tNet);
     animateVal("us-net", uNet);
@@ -458,19 +512,13 @@ function renderApp() {
     $('us-update-time').innerText = `報價：${fmtTime(appData.marketTime.us)}`;
 }
 
-/**
- * 更新頂部 Banner (Hero Section) 的數據與文字
- * @param {string} v - 目前切換的分頁 ID
- */
 function updateHeroBanner(v) {
     const isSt = (v === 'history' || v === 'edit' || v === 'transactions');
     const isTracking = (v === 'tracking');
     const isHistory = (v === 'history');
 
-    // 1. 更新主標題
     $('hero-main-title').innerText = isSt ? '股票資產總淨值' : '總資產淨值';
 
-    // 2. 更新主金額
     const mainAmount = isSt ? appData.totals.stockNet : appData.totals.grandNet;
     animateVal("grand-total", mainAmount);
 
@@ -478,14 +526,12 @@ function updateHeroBanner(v) {
     if (!subInfo) return;
 
     if (isTracking) {
-        // 🌟 追蹤頁面：文字變色 (金/紅/藍)、數字維持黑色
         subInfo.innerHTML = `
             <div><span style="color: #C5A059; font-weight: 600;">台股資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.twNet)}</strong></div>
             <div><span style="color: #D96B6B; font-weight: 600;">美股資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.usNet)}</strong></div>
             <div><span style="color: #7aa0dd; font-weight: 600;">現金部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.cash)}</strong></div>
         `;
     } else if (isHistory) {
-        // 🌟 績效頁面：顯示台股/美股今日損益，文字灰色，數字依漲跌變色
         let twToday = 0;
         let usToday = 0;
 
@@ -505,7 +551,6 @@ function updateHeroBanner(v) {
             <div><span style="color: var(--text-muted);">美股今日損益</span><strong class="num ${clr(usToday)}">${usToday > 0 ? '+' : ''}${fmtM(usToday)}</strong></div>
         `;
     } else {
-        // 🌟 預設顯示 (首頁/記帳/編輯)：顯示 總投資成本、總報酬率、今日損益
         const roi = appData.totals.grandCost === 0 ? 0 :
             ((appData.totals.stockNet - appData.totals.stockCost) / (isSt ? appData.totals.stockCost : appData.totals.grandCost)) * 100;
         const tp = appData.totals.todayProfit || 0;
@@ -518,23 +563,12 @@ function updateHeroBanner(v) {
     }
 }
 
-/**
- * 分頁導覽控制
- * @param {string} target - 目標分頁 ID
- * @param {HTMLElement} el - 點擊的導覽列元素
- */
-/**
- * 更新後的分頁導覽控制
- * 已移除 'edit' 分頁，並維持 'test' 分頁隱藏 Banner 的邏輯
- */
 function navTo(target, el) {
     currentTab = target;
 
-    // 1. 更新導覽列 UI 狀態
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
 
-    // 2. 切換各分頁內容區塊 (👉 新增 'news')
     ['dashboard', 'tracking', 'history', 'transactions', 'info', 'news'].forEach(t => {
         const contentDiv = $(t + '-content');
         if (contentDiv) {
@@ -542,25 +576,22 @@ function navTo(target, el) {
         }
     });
 
-    // 3. 控制頂部 Banner (Hero Section)
     const heroSection = document.querySelector('.hero-section');
     if (heroSection) {
         if (target === 'info' || target === 'news') {
-            heroSection.classList.add('hide'); // 👉 資訊與新聞頁面都隱藏主 Banner
+            heroSection.classList.add('hide');
         } else {
             heroSection.classList.remove('hide');
             updateHeroBanner(target);
         }
     }
 
-    // 4. 執行各分頁特定的渲染邏輯
     if (target === 'dashboard') renderAllocationChart();
     else if (target === 'history' && !isHistoryLoaded && (appData.twStocks.length > 0 || appData.usStocks.length > 0)) loadHistoryData();
     else if (target === 'tracking') renderTrackingChart();
     else if (target === 'transactions') renderTxView();
     else if (target === 'info') renderInfoView();
     else if (target === 'news') {
-        // 👉 如果切換到新聞頁面，且還沒有資料，就去抓資料
         if (appData.news.length === 0) fetchNewsData();
         else renderNewsView();
     }
@@ -585,17 +616,102 @@ function animateVal(id, end) {
     requestAnimationFrame(step);
 }
 
+// 🌟 移除原本的右上角定位器，改用「純 HTML 外部提示框」魔法
 const getChartOpt = () => ({
     responsive: true,
     maintainAspectRatio: false,
     layout: { padding: { bottom: 10 } },
+
+    // 依然保持游標靠近就吸附的磁吸效果
+    interaction: {
+        mode: 'index',
+        intersect: false
+    },
+
     plugins: {
         legend: { display: false },
         tooltip: {
-            displayColors: false,
-            callbacks: { label: c => 'NT$ ' + c.parsed.y.toLocaleString() }
+            enabled: false, // 🌟 關鍵 1：關閉原本內建在畫布裡面的提示框
+            position: 'nearest',
+            external: function (context) {
+                // 🌟 關鍵 2：動態生成一個不受畫布限制的 HTML 提示區塊
+                let tooltipEl = document.getElementById('custom-chart-tooltip');
+
+                // 如果還沒有這個區塊，就在網頁 body 產生一個
+                if (!tooltipEl) {
+                    tooltipEl = document.createElement('div');
+                    tooltipEl.id = 'custom-chart-tooltip';
+                    tooltipEl.style.background = 'rgba(26, 36, 54, 0.9)';
+                    tooltipEl.style.borderRadius = '8px';
+                    tooltipEl.style.color = 'white';
+                    tooltipEl.style.opacity = 0;
+                    tooltipEl.style.pointerEvents = 'none';
+                    tooltipEl.style.position = 'absolute';
+                    tooltipEl.style.transform = 'translate(-100%, 0)'; // 強制往左邊生長，絕對不會蓋到右邊的按鈕
+                    tooltipEl.style.transition = 'all .15s ease'; // 加上滑順的跟隨動畫
+                    tooltipEl.style.zIndex = 9999;
+                    tooltipEl.style.padding = '12px';
+                    tooltipEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                    tooltipEl.style.fontFamily = 'Inter, sans-serif';
+                    document.body.appendChild(tooltipEl);
+                }
+
+                const tooltipModel = context.tooltip;
+
+                // 如果滑鼠離開了圖表，就把這個 HTML 區塊隱藏
+                if (tooltipModel.opacity === 0) {
+                    tooltipEl.style.opacity = 0;
+                    return;
+                }
+
+                // 組合裡面的日期、顏色標籤、線條名稱與金額數字
+                if (tooltipModel.body) {
+                    const titleLines = tooltipModel.title || [];
+
+                    // 標題區塊：加上底線分隔，視覺更俐落
+                    let innerHtml = `<div style="font-weight:bold; margin-bottom:12px; font-size:14px; color:#8A94A6; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">${titleLines[0]}</div>`;
+
+                    // 🌟 啟動 CSS Grid 網格：設定為 3 欄並排，並拉開直向與橫向的間距
+                    innerHtml += `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 24px;">`;
+
+                    tooltipModel.dataPoints.forEach(function (dp, i) {
+                        const colors = tooltipModel.labelColors[i];
+                        const borderColor = colors.borderColor;
+                        const val = Math.round(dp.parsed.y).toLocaleString();
+                        const label = dp.dataset.label;
+
+                        // 🌟 內部排版優化：將「標籤」與「金額」改為上下兩行，適合多欄位並排閱讀
+                        innerHtml += `
+                            <div style="display:flex; flex-direction:column; min-width: 120px;">
+                                <div style="display:flex; align-items:center; font-size:12px; color:#E2E8F0; margin-bottom:4px;">
+                                    <span style="display:inline-block; width:10px; height:10px; margin-right:6px; background:${borderColor}; border-radius:2px;"></span>
+                                    <span>${label}</span>
+                                </div>
+                                <span style="font-weight:bold; color:#fff; font-size:14px; margin-left:16px;">NT$ ${val}</span>
+                            </div>
+                        `;
+                    });
+
+                    innerHtml += `</div>`; // 關閉 Grid 容器
+                    tooltipEl.innerHTML = innerHtml;
+                }
+
+                // 🌟 關鍵 3：將提示框固定在圖表中央
+                const chart = context.chart;
+
+                tooltipEl.style.opacity = 1;
+
+                const position = chart.canvas.getBoundingClientRect();
+                const chartCenterX = position.left + window.scrollX + position.width / 2;
+                const chartCenterY = position.top + window.scrollY + position.height / 2;
+
+                tooltipEl.style.transform = 'translate(-50%, -260%)';
+                tooltipEl.style.left = chartCenterX + 'px';
+                tooltipEl.style.top = chartCenterY + 'px';
+            }
         }
     },
+
     scales: {
         y: {
             ticks: { font: { size: 10, family: 'Inter' }, callback: v => (v / 10000).toFixed(0) + '萬' },
@@ -608,8 +724,130 @@ const getChartOpt = () => ({
     }
 });
 
-// 🌟 Chart.js 優化：支援多條折線與多重獨立 Y 軸
-// 🌟 Chart.js 優化：支援多條折線與多重獨立 Y 軸
+function renderDistributionCharts() {
+    // --- 共用：取得單一股票的目前淨值 ---
+    const getTwNetValue = (symbol) => {
+        const stock = appData.twStocks.find(s => s.symbol === symbol);
+        if (stock && !stock.isError && stock.currentPrice) {
+            return stock.currentPrice * stock.shares;
+        }
+        return 0;
+    };
+    const getUsNetValue = (symbol) => {
+        const stock = appData.usStocks.find(s => s.symbol === symbol);
+        if (stock && !stock.isError && stock.currentPrice) {
+            return stock.currentPrice * stock.shares * appData.settings.usdToTwd;
+        }
+        return 0;
+    };
+
+    // --- 共用：把 {label,value,color,pinned?}[] 畫成堆疊長條圖 + 圖例，並塞進指定容器 ---
+    // pinned: true 的項目固定排在最後（不參與金額排序），目前用於現金資產
+    // fixedOrder: true 時，整組資料完全依原始陣列順序顯示，不做任何金額排序
+    const renderStackedBar = (container, data, emptyText, fixedOrder = false) => {
+        const total = data.reduce((sum, item) => sum + item.value, 0);
+
+        if (total <= 0) {
+            container.innerHTML = `<div class="empty-state" style="padding: 10px 0;">${emptyText}</div>`;
+            return;
+        }
+
+        let sorted;
+        if (fixedOrder) {
+            sorted = data;
+        } else {
+            const normal = data.filter(item => !item.pinned).sort((a, b) => b.value - a.value);
+            const pinned = data.filter(item => item.pinned);
+            sorted = [...normal, ...pinned];
+        }
+
+        const segmentsHtml = sorted.map(item => {
+            const percentage = (item.value / total) * 100;
+            return `<div class="stacked-bar-segment" style="width: ${percentage.toFixed(2)}%; background-color: ${item.color};" title="${item.label}: ${percentage.toFixed(1)}%"></div>`;
+        }).join('');
+
+        const legendHtml = sorted.map(item => {
+            const percentage = (item.value / total) * 100;
+            return `
+                <div class="stacked-bar-legend-item">
+                    <span class="legend-color-box" style="background-color: ${item.color};"></span>
+                    <span class="legend-label">${item.label}</span>
+                    <span class="legend-value">${percentage.toFixed(1)}%</span>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="stacked-bar-wrapper">
+                ${segmentsHtml}
+            </div>
+            <div class="stacked-bar-legend">
+                ${legendHtml}
+            </div>
+        `;
+    };
+
+    // --- 1. 台股組合持股分佈 ---
+    const twDistContainer = $('tw-dist-bars');
+    if (twDistContainer) {
+        const tsmcValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.6) + (getTwNetValue('00881') * 0.4);
+        const otherTechValue = (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.3) + (getTwNetValue('00878') * 0.6);
+        const nonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.1) + (getTwNetValue('00878') * 0.4);
+
+        // 固定順序：TSMC概念 → 其他科技電子 → 傳產金融（不依金額排序）
+        const twData = [
+            { label: 'TSMC 概念', value: tsmcValue, color: 'rgba(44, 58, 80, 0.7)' },
+            { label: '其他科技電子', value: otherTechValue, color: '#5B8DB8' },
+            { label: '傳產金融', value: nonTechValue, color: '#549B7B' }
+        ];
+
+        renderStackedBar(twDistContainer, twData, '無台股資料可供分析', true);
+    }
+    // --- 2. 美股組合持股分佈 ---
+    const usDistContainer = $('us-dist-bars');
+    if (usDistContainer) {
+        const techSymbols = ['AAPL', 'GOOG', 'TSLA', 'QQQ', 'SMH', 'SPCX'];
+        const usTechValue = techSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
+            + (getUsNetValue('VTI') * 0.35);
+
+        const nonTechSymbols = ['TLT', 'LQD'];
+        const usNonTechValue = nonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
+            + (getUsNetValue('VTI') * 0.65);
+
+        const usData = [
+            { label: '科技電子類股', value: usTechValue, color: '#5B8DB8' },
+            { label: '非科技類股', value: usNonTechValue, color: '#549B7B' }
+        ];
+
+        renderStackedBar(usDistContainer, usData, '無美股資料可供分析');
+    }
+
+    // --- 3. 總資產大類配比 ---
+    const totalDistContainer = $('total-dist-bars');
+    if (totalDistContainer) {
+        const twTechValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.6) + (getTwNetValue('00881') * 0.4)
+            + (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.3) + (getTwNetValue('00878') * 0.6);
+        const twNonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.1) + (getTwNetValue('00878') * 0.4);
+
+        const usTechSymbols = ['AAPL', 'GOOG', 'TSLA', 'QQQ', 'SMH', 'SPCX'];
+        const usTechValue = usTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
+            + (getUsNetValue('VTI') * 0.4);
+        const usNonTechSymbols = ['TLT', 'LQD'];
+        const usNonTechValue = usNonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
+            + (getUsNetValue('VTI') * 0.6);
+
+        const cashValue = (appData.cash && !isNaN(appData.cash)) ? appData.cash : 0;
+
+        const totalData = [
+            { label: '台美科技電子股', value: twTechValue + usTechValue, color: '#5B8DB8' },
+            { label: '台美非科技電子股', value: twNonTechValue + usNonTechValue, color: '#549B7B' },
+            { label: '現金資產', value: cashValue, color: '#C5A059', pinned: true }
+        ];
+
+        renderStackedBar(totalDistContainer, totalData, '無資料可供分析');
+    }
+}
+
 function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
     if (chartInstance) chartInstance.destroy();
     const ctx = $(ctxId);
@@ -617,7 +855,6 @@ function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
 
     const options = getChartOpt();
 
-    // 確保 scales 結構存在
     options.scales = options.scales || {};
     options.scales.x = options.scales.x || { ticks: {}, grid: {} };
 
@@ -640,25 +877,23 @@ function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
         return 'rgba(0, 0, 0, 0)';
     };
 
-    // 👉 新增：如果有多條走勢線 (大於 1 條)，就在右上角顯示小字圖例
     if (datasetsConfig.length > 1) {
         options.plugins.legend = {
             display: true,
             position: 'top',
-            align: 'end', // 靠右對齊
+            align: 'end',
             labels: {
-                boxWidth: 5,      // 讓顏色標示變小
+                boxWidth: 5,
                 boxHeight: 5,
-                usePointStyle: true, // 變成質感小圓點
-                font: { size: 10, family: 'Inter' }, // 字體縮小
-                color: '#8A94A6'  // 圖例文字顏色 (深灰色)
+                usePointStyle: true,
+                font: { size: 10, family: 'Inter' },
+                color: '#8A94A6'
             }
         };
     } else {
         options.plugins.legend = { display: false };
     }
 
-    // 動態產生 datasets 陣列
     const chartDatasets = datasetsConfig.map(ds => ({
         label: ds.label,
         data: ds.data,
@@ -669,11 +904,10 @@ function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
         pointBorderColor: ds.color,
         pointRadius: ds.isBenchmark ? 0 : 0,
         fill: ds.bg !== 'transparent',
-        tension: 0, // 👉 修改：從 0.5 改為 0，讓所有線條變成筆直的轉折，不再彎曲
+        tension: 0,
         yAxisID: ds.yAxisID || 'y'
     }));
 
-    // 動態加入副 Y 軸
     datasetsConfig.forEach(ds => {
         if (ds.yAxisID && ds.yAxisID !== 'y') {
             options.scales[ds.yAxisID] = { type: 'linear', display: false };
@@ -715,7 +949,6 @@ function renderAllocationChart() {
     }
 }
 
-// 渲染追蹤分頁圖表 (已實現總資產與股票資產的個別基準對齊)
 async function renderTrackingChart() {
     animateVal("tracking-stock-total", appData.totals.stockNet);
     animateVal("tracking-cash-total", appData.cash);
@@ -748,7 +981,6 @@ async function renderTrackingChart() {
     const stockData = hist.map(i => i.stockNet || (i.grandNet - (i.cash || 0)));
     const cashData = hist.map(i => i.cash);
 
-    // 1. 準備基礎線條
     let nwDatasets = [
         { label: '總資產', data: nwData, color: '#C5A059', bg: 'rgba(197,160,89,0.1)' }
     ];
@@ -762,10 +994,9 @@ async function renderTrackingChart() {
         { label: '現金', data: cashData, color: '#3A4A63', bg: 'rgba(58,74,99,0.1)' }
     ]);
 
-    // 2. 呼叫 API 並進行個別定錨基準化
     const bench = await fetchBenchmarkData();
     if (bench && bench['006208'].length > 0 && bench['SPY'].length > 0) {
-        
+
         const matchPrice = (targetDateStr, benchHistory) => {
             const targetTime = new Date(targetDateStr).getTime();
             let closest = benchHistory[0]?.price || 0;
@@ -779,22 +1010,18 @@ async function renderTrackingChart() {
         const rawData6208 = hist.map(i => matchPrice(i.date, bench['006208']));
         const rawDataSPY = hist.map(i => matchPrice(i.date, bench['SPY']));
 
-        // 🌟 關鍵邏輯：尋找 3/17 的索引
         let baseIndex = lbls.findIndex(l => l.includes('-03-17'));
-        if (baseIndex === -1) baseIndex = 0; 
+        if (baseIndex === -1) baseIndex = 0;
 
-        // 👉 設定不同的定錨金額
-        const nwTargetAmount = 4756878;   // 總資產定錨
-        const stockTargetAmount = 2650517; // 股票資產定錨
+        const nwTargetAmount = 4756878;
+        const stockTargetAmount = 2650517;
 
-        // 基準化計算函數
         const normalize = (rawData, targetAmt) => {
             const basePrice = rawData[baseIndex] || rawData[0];
             if (!basePrice) return rawData;
             return rawData.map(price => (price / basePrice) * targetAmt);
         };
 
-        // 3. 將大盤線條加入總資產圖表 (對齊 4,756,878)
         nwDatasets.push({
             label: '006208 (對比總資產)',
             data: normalize(rawData6208, nwTargetAmount),
@@ -804,7 +1031,7 @@ async function renderTrackingChart() {
             isBenchmark: true
         });
         nwDatasets.push({
-            label: 'SPY (對比總資產)',
+            label: 'SPY',
             data: normalize(rawDataSPY, nwTargetAmount),
             color: 'rgba(155, 89, 182, 0.7)',
             bg: 'transparent',
@@ -812,9 +1039,8 @@ async function renderTrackingChart() {
             isBenchmark: true
         });
 
-        // 4. 將大盤線條加入股票資產圖表 (對齊 2,650,517)
         stockDatasets.push({
-            label: '006208 (對比股票)',
+            label: '006208',
             data: normalize(rawData6208, stockTargetAmount),
             color: 'rgba(243, 156, 18, 0.7)',
             bg: 'transparent',
@@ -822,7 +1048,7 @@ async function renderTrackingChart() {
             isBenchmark: true
         });
         stockDatasets.push({
-            label: 'SPY (對比股票)',
+            label: 'SPY',
             data: normalize(rawDataSPY, stockTargetAmount),
             color: 'rgba(155, 89, 182, 0.7)',
             bg: 'transparent',
@@ -830,7 +1056,6 @@ async function renderTrackingChart() {
             isBenchmark: true
         });
 
-        // 5. 最終渲染
         chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwDatasets);
         chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockDatasets);
     }
@@ -925,20 +1150,12 @@ function renderEditView() {
     renderChangelog();
 }
 
-// 修正後的 saveCash 函式
 async function saveCash() {
     const val = parseFloat($('edit-cash-input').value);
     if (!isNaN(val)) {
-        // 1. 更新變更紀錄
         addChangelog('cash', 'TWD', `${appData.cash.toLocaleString()} → ${val.toLocaleString()}`);
-
-        // 2. 更新記憶體資料
         appData.cash = val;
-
-        // 3. 立即渲染畫面（讓使用者看到數字變動）
         renderApp();
-
-        // 4. 【關鍵缺失】將資料同步回雲端
         try {
             await saveToCloud();
             showToast('💰 現金已同步至雲端');
@@ -1044,8 +1261,13 @@ async function loadHistoryData() {
                     const pD1 = s.prevClose ? (s.currentPrice - s.prevClose) * s.shares * (s.m === 'US' ? appData.settings.usdToTwd : 1) : 0;
                     const hist5 = getHist(5);
                     const hist22 = getHist(22);
+                    const exRate = s.m === 'US' ? appData.settings.usdToTwd : 1;
+                    const totalCost = s.costPrice * s.shares;
+                    const totalNet = s.currentPrice * s.shares;
+                    const totalProfit = (totalNet - totalCost) * exRate;
+                    const totalProfitPct = totalCost > 0 ? ((totalNet - totalCost) / totalCost) * 100 : 0;
 
-                    appData.history.push({ symbol: s.symbol, d1: d1r, d5: hist5.pct, d22: hist22.pct, pD1: pD1, pM1: hist22.profit });
+                    appData.history.push({ market: s.m, symbol: s.symbol, d1: d1r, d5: hist5.pct, d22: hist22.pct, pD1: pD1, pM1: hist22.profit, totalProfit: totalProfit, totalProfitPct: totalProfitPct });
                     ok = true;
                 }
             } catch (e) { }
@@ -1070,35 +1292,55 @@ function renderHistory() {
     const div = $('history-list-container');
     if (!appData.history.length) return div.innerHTML = '<div class="empty-state">無數據</div>';
 
-    let d = [...appData.history].sort((a, b) => currentHeroMode === 'd1Pct' ? b.d1 - a.d1 : (currentHeroMode === 'd1Profit' ? b.pD1 - a.pD1 : b.pM1 - a.pM1));
+    let d = [...appData.history];
+    if (currentHeroMode === 'default') {
+        d.sort((a, b) => {
+            if (a.market === 'TW' && b.market !== 'TW') return -1;
+            if (a.market !== 'TW' && b.market === 'TW') return 1;
+            return a.symbol.localeCompare(b.symbol);
+        });
+    } else {
+        d.sort((a, b) => currentHeroMode === 'd1Pct' ? b.d1 - a.d1 : (currentHeroMode === 'd1Profit' ? b.pD1 - a.pD1 : b.pM1 - a.pM1));
+    }
 
     const fPct = v => `<span class="${clr(v)}">${fmtP(v)}</span>`;
     const fPro = v => `<span class="${clr(v)}">${v > 0 ? '+' : ''}${fmtM(v)}</span>`;
 
-    let sumD1 = d.reduce((a, b) => a + (b.pD1 || 0), 0);
-    let sumM1 = d.reduce((a, b) => a + (b.pM1 || 0), 0);
+    const sumD1 = d.reduce((a, b) => a + (b.pD1 || 0), 0);
+    const sumTotalProfit = d.reduce((a, b) => a + (b.totalProfit || 0), 0);
+    const gridCols = "1fr 1.4fr 1.1fr 1.4fr 1.1fr 1.1fr 1.1fr";
 
     let h = `
-                <div class="history-grid" style="color:var(--text-muted); border-bottom:2px solid var(--border-light); padding-bottom:8px;">
-                    <div class="col-name">代號</div><div>1日(%)</div><div>5日(%)</div><div>22日(%)</div>
-                    <div class="text-right">月損益</div><div class="text-right">日損益</div>
+                <div class="history-grid" style="color:var(--text-muted); border-bottom:2px solid var(--border-light); padding-bottom:8px; grid-template-columns: ${gridCols};">
+                    <div class="col-name">代號</div>
+                    <div class="text-right">當日損益</div>
+                    <div>當日損益(%)</div>
+                    <div class="text-right">累計損益</div>
+                    <div>累計損益(%)</div>
+                    <div>5日(%)</div>
+                    <div>22日(%)</div>
                 </div>
-                <div class="history-grid" style="background:rgba(197,160,89,0.08); border-radius:6px; padding:10px 8px; margin:8px 0; border:none;">
-                    <div class="col-name" style="color:var(--accent-gold);font-size:13px;">組合總計</div><div>-</div><div>-</div><div>-</div>
-                    <div class="num text-right" style="font-weight:700;font-size:13px">${fPro(sumM1)}</div>
+                <div class="history-grid" style="background:rgba(197,160,89,0.08); border-radius:6px; padding:10px 8px; margin:8px 0; border:none; grid-template-columns: ${gridCols};">
+                    <div class="col-name" style="color:var(--accent-gold);font-size:13px;">組合總計</div>
                     <div class="num text-right" style="font-weight:700;font-size:13px">${fPro(sumD1)}</div>
+                    <div>-</div>
+                    <div class="num text-right" style="font-weight:700;font-size:13px">${fPro(sumTotalProfit)}</div>
+                    <div>-</div>
+                    <div>-</div>
+                    <div>-</div>
                 </div>
             `;
 
     d.forEach(i => {
         h += `
-                    <div class="history-grid">
+                    <div class="history-grid" style="grid-template-columns: ${gridCols};">
                         <div class="col-name num">${i.symbol}</div>
+                        <div class="num text-right">${fPro(i.pD1)}</div>
                         <div class="num">${fPct(i.d1)}</div>
+                        <div class="num text-right">${fPro(i.totalProfit)}</div>
+                        <div class="num">${fPct(i.totalProfitPct)}</div>
                         <div class="num">${fPct(i.d5)}</div>
                         <div class="num">${fPct(i.d22)}</div>
-                        <div class="num text-right">${fPro(i.pM1)}</div>
-                        <div class="num text-right">${fPro(i.pD1)}</div>
                     </div>
                 `;
     });
@@ -1117,8 +1359,6 @@ function clearTxForm() {
     $('tx-price').innerText = '0';
     $('tx-date').value = new Date().toISOString().split('T')[0];
 }
-
-
 
 function renderDraftTxs() {
     const dCard = $('draft-tx-card'), dList = $('draft-tx-list');
@@ -1261,7 +1501,6 @@ async function commitTransactions() {
     showToast('🏦 交易已寫入並同步庫存！(現金請手動調整)');
 }
 
-// 初始化
 window.onload = () => refreshData(false);
 
 function updateCostPlaceholder() {
@@ -1269,23 +1508,19 @@ function updateCostPlaceholder() {
     const costInput = $('tx-cost');
     const selectedVal = symbolSelect.value;
 
-    // 情況 A：選擇「新增監控標的」
     if (selectedVal === 'NEW_ACTION') {
         const market = $('add-market').value;
         costInput.placeholder = (market === 'US') ? "請輸入美金總額 (USD)" : "請輸入台幣總額 (TWD)";
     }
-    // 情況 B：尚未選擇
     else if (selectedVal === '') {
         costInput.placeholder = "請選擇標的";
     }
-    // 情況 C：選擇現有庫存
     else {
-        // 判斷該代號是否存在於美股清單中
         const isUS = appData.usStocks.some(s => s.symbol === selectedVal);
         costInput.placeholder = isUS ? "請輸入美金總額 (USD)" : "請輸入台幣總額 (TWD)";
     }
 }
-// --- 1. UI 控制：顯示/隱藏新增標的欄位 ---
+
 function toggleNewStockFields() {
     const symbolSelect = $('tx-symbol');
     const extraFields = $('new-stock-extra-fields');
@@ -1295,23 +1530,19 @@ function toggleNewStockFields() {
     } else {
         extraFields.style.display = 'none';
     }
-    // 每次切換隱藏/顯示時，重新檢查一次幣別提示
     updateCostPlaceholder();
 }
 
-// --- 2. 核心邏輯：處理暫存按鈕點擊 ---
 async function handleStageTx() {
     const symbolSelect = $('tx-symbol');
     let targetSymbol = symbolSelect.value;
 
-    // 如果是新增標的模式
     if (targetSymbol === 'NEW_ACTION') {
         const market = $('add-market').value;
         const newSym = $('add-symbol').value.trim().toUpperCase();
 
         if (!newSym) return alert("請輸入新標的代號！");
 
-        // 檢查是否已經存在於庫存中
         const exists = [...appData.twStocks, ...appData.usStocks].some(s => s.symbol === newSym);
         if (exists) {
             alert("此標的已在庫存中，請直接從下拉選單選擇。");
@@ -1320,7 +1551,6 @@ async function handleStageTx() {
             return;
         }
 
-        // 建立一個初始標的物件並推入 appData
         const obj = {
             symbol: market === 'TW' ? newSym.replace(/\.TW$|\.TWO$/i, '') : newSym,
             shares: 0,
@@ -1332,36 +1562,28 @@ async function handleStageTx() {
 
         appData[market === 'TW' ? 'twStocks' : 'usStocks'].push(obj);
 
-        // 加入變更紀錄
         addChangelog('add', obj.symbol, `建立新標的 (${market})`);
 
-        // 重新渲染選單，以便 stageTx 能夠讀取到正確的 symbol
         renderTxView();
 
-        // 將選單選回剛剛建立的那個代號
         $('tx-symbol').value = obj.symbol;
         toggleNewStockFields();
 
-        // 觸發價格更新（非同步，不阻塞暫存）
         fetchPricesAndRender();
 
         targetSymbol = obj.symbol;
     }
 
-    // 執行原有的 stageTx
     stageTx();
 }
 
-// --- 3. 改寫 renderTxView (更新下拉選單結構與卡片標題) ---
 function renderTxView() {
     const twStocks = appData.twStocks || [];
     const usStocks = appData.usStocks || [];
     const sel = $('tx-symbol');
 
-    // 獲取目前選中的值（避免渲染時被跳掉）
     const currentVal = sel.value;
 
-    // 重新組合下拉選單 HTML
     let optionsHtml = `
         <option value="">請選擇標的...</option>
         <optgroup label="快捷操作">
@@ -1383,15 +1605,12 @@ function renderTxView() {
 
     sel.innerHTML = optionsHtml;
 
-    // 試著還原先前選中的值
     if (currentVal) sel.value = currentVal;
 
-    // 設定日期預設值
     if (!$('tx-date').value) $('tx-date').value = new Date().toISOString().split('T')[0];
 
     renderDraftTxs();
 
-    // 渲染下方的歷史紀錄區
     const histDiv = $('stock-tx-histories');
     const allStocks = [...twStocks, ...usStocks];
     if (!allStocks.length) {
@@ -1405,7 +1624,6 @@ function renderTxView() {
     allStocks.forEach(s => {
         const stTxs = (appData.transactions || []).filter(t => t.symbol === s.symbol).sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        // 🌟 判斷是台股還是美股，並設定對應顏色的標籤
         const isTW = twStocks.some(tw => tw.symbol === s.symbol);
         const marketLabel = isTW
             ? `<span style="color: #C5A059; margin-right: 8px; font-size: 0.65em;vertical-align: middle">台股</span>`
@@ -1456,6 +1674,7 @@ function renderTxView() {
     });
     histDiv.innerHTML = histHtml;
 }
+
 async function fetchBenchmarkData() {
     if (appData.benchmarkData) return appData.benchmarkData;
     try {
@@ -1467,7 +1686,6 @@ async function fetchBenchmarkData() {
             const result = json.chart.result[0];
             const timestamps = result.timestamp;
             const closes = result.indicators.quote[0].close;
-            // 轉換為 { time, price } 的陣列
             return timestamps.map((t, i) => ({ time: t * 1000, price: closes[i] })).filter(d => d.price != null);
         };
         const [twData, usData] = await Promise.all([fetchSym('006208.TW'), fetchSym('SPY')]);
@@ -1478,13 +1696,6 @@ async function fetchBenchmarkData() {
         return null;
     }
 }
-// =========================================
-// 新聞模組
-// =========================================
-
-// =========================================
-// 新聞模組 (已修正資料結構解析)
-// =========================================
 
 async function fetchNewsData() {
     const listDiv = document.querySelector('#news-content .news-list');
@@ -1498,39 +1709,31 @@ async function fetchNewsData() {
         if (!res.ok) throw new Error('伺服器回應錯誤');
 
         const data = await res.json();
-        console.log("【除錯】Worker 回傳的新聞資料：", data);
 
         let allNews = [];
 
-        // 👉 針對新的物件結構進行解析
         if (data && data.articles) {
-            // 解析匯率新聞 (fx)
             if (data.articles.fx) {
                 allNews = allNews.concat(data.articles.fx.map(item => ({ ...item, category: 'CURRENCY' })));
             }
-            // 解析台股新聞 (tw)
             if (data.articles.tw) {
                 allNews = allNews.concat(data.articles.tw.map(item => ({ ...item, category: 'TW STOCK' })));
             }
-            // 解析美股新聞 (us)
             if (data.articles.us) {
                 allNews = allNews.concat(data.articles.us.map(item => ({ ...item, category: 'US STOCK' })));
             }
         } else if (Array.isArray(data)) {
-            allNews = data; // 相容備用
+            allNews = data;
         }
 
-        // 👉 建立嚴格時間防線：現在時間往前推 48 小時
         const strictTimeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
-        // 👉 1. 過濾：只保留大於等於 48 小時前的新聞
-        // 👉 2. 排序：依照發布時間排序 (最新的在最上面)
         allNews = allNews
             .filter(item => new Date(item.pubDate) >= strictTimeLimit)
             .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 
         appData.news = allNews;
-        appData.newsUpdatedTime = data.updatedTime || null; // 如果最外層有 updatedTime 就存起來
+        appData.newsUpdatedTime = data.updatedTime || null;
 
         renderNewsView();
     } catch (e) {
@@ -1548,16 +1751,13 @@ function renderNewsView() {
         return;
     }
 
-    // 👉 更新副標題時間
     const subtitle = document.querySelector('.news-hero-subtitle');
     if (subtitle) {
-        // 如果 API 沒給總更新時間，就拿最新的一篇新聞時間代替
         let timeStr = appData.newsUpdatedTime || appData.news[0].pubDate;
         let displayTime = '剛剛';
 
         if (timeStr) {
             try {
-                // 將 GMT 格式轉為台灣當地好閱讀的格式 (YYYY/MM/DD HH:mm)
                 const d = new Date(timeStr);
                 displayTime = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
             } catch (e) {
@@ -1567,12 +1767,8 @@ function renderNewsView() {
         subtitle.innerHTML = `最後更新：${displayTime}<br>目前使用關鍵字：台股、美股、美元匯率、國際局勢`;
     }
 
-    // 👉 生成卡片 HTML
     const cardsHtml = appData.news.map(item => {
-        // 使用解析時賦予的分類，如果沒有才退回預設 BUSINESS
         const tag = item.category || 'BUSINESS';
-
-        // 格式化單篇文章的發布時間
         const itemDate = item.pubDate ? new Date(item.pubDate).toLocaleString('zh-TW', { hour12: false, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
         return `
