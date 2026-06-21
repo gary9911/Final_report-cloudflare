@@ -37,7 +37,7 @@
         </div>
     </nav>
     <div class="app-container">
-        
+
         <div class="global-refresh-btn" onclick="refreshData(true); if(currentTab === 'news') fetchNewsData();">
             <i class="fa-solid fa-arrow-rotate-right" id="syncBtn"></i>
         </div>
@@ -45,7 +45,7 @@
         <header class="hero-section">
             <div class="hero-title" id="hero-main-title">總資產淨值</div>
             <div class="hero-amount"><span class="currency">NT$</span><span class="num" id="grand-total">0</span></div>
-            
+
             <div class="hero-sub-info">
                 <div><span>總投資成本</span><strong class="num" id="grand-cost">0</strong></div>
                 <div><span>總報酬率</span><strong class="num color-up" id="grand-roi">+0.00%</strong></div>
@@ -91,8 +91,8 @@
                     <div class="list-container" id="us-list"></div>
                     <div class="card-footer-time" id="us-update-time">來源報價：連線中...</div>
                 </div>
-                <div class="card">
-                    <div class="card-header cursor-default mb-0">
+                <div class="card" id="card-cash">
+                    <div class="card-header cursor-default">
                         <div class="card-title-group">
                             <h2 class="card-title">現金資產</h2>
                             <span class="card-subtitle" id="exchange-rate-display">匯率載入中...</span>
@@ -108,6 +108,40 @@
                             </div>
                         </div>
                     </div>
+                    <div class="card-footer-time">&nbsp;</div>
+                </div>
+                <div class="card">
+                    <div class="card-header cursor-default mb-0">
+                        <div class="card-title-group">
+                            <h2 class="card-title">台股組合持股分佈</h2>
+                            <span class="card-subtitle">依市值佔比排列</span>
+                        </div>
+                    </div>
+                    <div class="bar-chart-container" id="tw-dist-bars">
+                        <div class="empty-state" style="padding: 10px 0;">資料計算中...</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header cursor-default mb-0">
+                        <div class="card-title-group">
+                            <h2 class="card-title">美股組合持股分佈</h2>
+                            <span class="card-subtitle">依市值佔比排列</span>
+                        </div>
+                    </div>
+                    <div class="bar-chart-container" id="us-dist-bars">
+                        <div class="empty-state" style="padding: 10px 0;">資料計算中...</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header cursor-default mb-0">
+                        <div class="card-title-group">
+                            <h2 class="card-title">總資產大類配比</h2>
+                            <span class="card-subtitle">股票、現金與其他</span>
+                        </div>
+                    </div>
+                    <div class="bar-chart-container" id="total-dist-bars">
+                        <div class="empty-state" style="padding: 10px 0;">資料計算中...</div>
+                    </div>
                 </div>
             </div>
             <div id="tracking-content" class="hide">
@@ -122,7 +156,7 @@
                     </div>
                     <div class="chart-container" id="nw-box"><canvas id="netWorthChart"></canvas></div>
                 </div>
-                <div class="mid-hero-section">
+                <div class="mid-hero-section" id="stock-hero">
                     <div class="hero-title color-down">股票資產總淨值</div>
                     <div class="hero-amount hero-amount-large">
                         <span class="currency currency-mid" style="color: #549B7B;">NT$</span><span class="num"
@@ -139,7 +173,7 @@
                     <div class="chart-container" id="st-box"><canvas id="stockNetChart"></canvas></div>
                 </div>
 
-                <div class="mid-hero-section">
+                <div class="mid-hero-section" id="cash-hero">
                     <div class="hero-title text-navy">現金資產淨值</div>
                     <div class="hero-amount hero-amount-large">
                         <span class="currency currency-mid" style="color: #6d82a3;">NT$</span><span class="num"
@@ -166,7 +200,7 @@
                 <div class="card">
                     <div class="card-header cursor-default pb-8">
                         <div class="card-title-group">
-                            <h2 class="card-title">資產趨勢與獲利矩陣</h2>
+                            <h2 class="card-title">即時獲利排行</h2>
                             <span class="card-subtitle" id="history-status">點擊載入歷史數據...</span>
                         </div>
                     </div>
@@ -361,12 +395,40 @@
                         <div class="market-chg num" id="mkt-tnx-chg">--</div>
                         <div id="mkt-tnx-time" style="margin-top: 8px; text-align: center;"></div>
                     </div>
+                    <div class="market-card">
+                        <div class="card-label">富台指 (現貨)</div>
+                        <div class="market-val" id="info-futw-val">--</div>
+                        <div class="market-chg" id="info-futw-chg">--</div>
+                        <div class="market-chg mt-10" id="info-futw-time"></div>
+                    </div>
+
+                    <div class="market-card">
+                        <div class="card-label">外資買賣超 (億)</div>
+                        <div class="market-val" id="info-foreign-val">--</div>
+                        <!-- 🌟 加上 id="info-foreign-date" -->
+                        <div class="market-chg color-muted" id="info-foreign-date">資料載入中...</div>
+                    </div>
+
+                    <div class="market-card">
+                        <div class="card-label">投信買賣超 (億)</div>
+                        <div class="market-val" id="info-trust-val">--</div>
+                        <!-- 🌟 加上 id="info-trust-date" -->
+                        <div class="market-chg color-muted" id="info-trust-date">資料載入中...</div>
+                    </div>
+
+                    <div class="market-card">
+                        <div class="card-label">自營商買賣超 (億)</div>
+                        <div class="market-val" id="info-dealer-val">--</div>
+                        <!-- 🌟 加上 id="info-dealer-date" -->
+                        <div class="market-chg color-muted" id="info-dealer-date">資料載入中...</div>
+                    </div>
                 </div>
             </div>
             <div id="news-content" class="hide">
-                
+
                 <div class="news-hero">
-                    <img src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=400&auto=format&fit=crop" alt="Breaking News" class="news-hero-img">
+                    <img src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=400&auto=format&fit=crop"
+                        alt="Breaking News" class="news-hero-img">
                     <div class="news-hero-text">
                         <h1 class="news-hero-title">新聞頁面:<br>這裡蒐集了您所關心的主題</h1>
                         <p class="news-hero-subtitle">目前使用關鍵字：台股、美股、美元匯率、國際局勢</p>
@@ -385,7 +447,7 @@
                 </div>
 
                 <div class="news-list">
-                    
+
                     <div class="news-card">
                         <h2 class="news-card-title">台股</h2>
                         <span class="news-card-tag">BUSINESS</span>
