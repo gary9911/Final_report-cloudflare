@@ -748,9 +748,9 @@ h3 {
 
 /* 🌟 高密度交易紀錄專屬樣式 */
 .tx-card {
-    padding: 16px 14px;
-    margin-bottom: 10px;
-    border-radius: 16px;
+    padding: 10px 8px;
+    margin-bottom: 2px;
+    border-radius: 12px;
 }
 
 .tx-stock-header {
@@ -899,7 +899,6 @@ h3 {
 
 .market-header {
     background: #2C3A50;
-    /* 延續專案深色調 */
     color: white;
     text-align: center;
     padding: 30px 15px;
@@ -927,16 +926,13 @@ h3 {
 .market-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    /* 2xN 佈局 */
     gap: 15px;
     padding: 0 4px 30px;
-    /* 配合 app-container 的 padding */
 }
 
 .market-card {
     background: var(--card-bg);
     border: 1.5px solid var(--accent-gold);
-    /* 使用全域金邊變數 */
     border-radius: 20px;
     padding: 22px 10px;
     text-align: center;
@@ -968,11 +964,9 @@ h3 {
     letter-spacing: -0.2px;
 }
 
-/* 針對小螢幕裝置的優化 */
 @media (max-width: 360px) {
     .market-grid {
         grid-template-columns: 1fr;
-        /* 螢幕過窄時改為單欄顯示 */
     }
 }
 
@@ -1071,15 +1065,14 @@ h3 {
     padding: 15px;
 }
 
-/* 頂部 Hero 區塊 */
 .news-hero {
     display: flex;
     align-items: center;
-    background-color: #F8F5FB; /* 淡紫色背景 */
+    background-color: #F8F5FB;
     padding: 20px 15px;
     gap: 15px;
     margin-bottom: 0;
-    border-radius: 8px 8px 0 0; /* 讓頂部微圓角 */
+    border-radius: 8px 8px 0 0;
 }
 
 .news-hero-img {
@@ -1087,7 +1080,7 @@ h3 {
     height: 100px;
     object-fit: cover;
     border-radius: 4px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .news-hero-text {
@@ -1115,7 +1108,6 @@ h3 {
     cursor: pointer;
 }
 
-/* 雙色分隔線 */
 .news-divider {
     display: flex;
     height: 6px;
@@ -1124,20 +1116,19 @@ h3 {
 
 .news-divider-yellow {
     background-color: #F3C95A;
-    flex: 3; /* 比例佔多數 */
+    flex: 3;
 }
 
 .news-divider-purple {
     background-color: #52319A;
-    flex: 1; /* 比例佔少數 */
+    flex: 1;
 }
 
-/* 新聞卡片列表 */
 .news-list {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    padding-bottom: 60px; /* 留白避免貼底 */
+    padding-bottom: 60px;
 }
 
 .news-card {
@@ -1193,15 +1184,15 @@ h3 {
 }
 
 .app-container {
-    position: relative; /* 確保內部絕對定位基準點正確 */
+    position: relative;
 }
 
 .global-refresh-btn {
     position: absolute;
-    top: 40px;    /* 距離頂部的高度，可依喜好微調 */
-    right: 35px;  /* 距離右側的寬度 */
-    z-index: 99;  /* 確保永遠顯示在最上層 */
-    color: #c5aa798d; /* 指揮中心專屬金 */
+    top: 40px;
+    right: 35px;
+    z-index: 99;
+    color: #c5aa798d;
     font-size: 20px;
     cursor: pointer;
     padding: 5px;
@@ -1209,14 +1200,445 @@ h3 {
 }
 
 .global-refresh-btn:active {
-    opacity: 0.5; /* 點擊時的視覺回饋 */
+    opacity: 0.5;
 }
 
-/* 讀取時的旋轉動畫 */
 #syncBtn.spin {
     animation: spin-anim 0.5s linear infinite;
 }
 
 @keyframes spin-anim {
-    100% { transform: rotate(360deg); }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   🌟 資訊頁面卡片優化補丁 (強制等高與顏色修復)
+   ========================================================================== */
+
+/* 1. 修正：讓紅綠漲跌顏色強制覆蓋掉原本的深藍色 */
+.market-val.color-up {
+    color: var(--up-red) !important;
+}
+
+.market-val.color-down {
+    color: var(--down-green) !important;
+}
+
+/* 2. 修正：強制所有市場卡片 (新舊) 的高度完全一致 */
+.market-grid {
+    grid-auto-rows: 1fr !important;
+    /* 魔法指令：讓所有行數強制保持同等高度 */
+}
+
+/* 3. 讓卡片內部的文字永遠保持垂直置中，維持俐落排版 */
+.market-card {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    height: 100% !important;
+    /* 確保卡片撐滿網格空間 */
+    box-sizing: border-box !important;
+}
+
+/* ==========================================================================
+   🖥️ 桌面版寬螢幕終極修復版 (當螢幕寬度大於 1024px 時觸發)
+   ========================================================================== */
+@media (min-width: 1024px) {
+
+    /* 1. 基礎佈局：解除手機版置中限制 */
+    body {
+        display: block !important;
+        background-color: #f4f5f7 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* 2. 徹底重設左側邊欄：解除 transform 置中、解除 480px 限制 */
+    .top-nav {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        transform: none !important;
+        /* 🔑 關鍵修復：解除手機版的 translateX(-50%) */
+        width: 240px !important;
+        max-width: none !important;
+        /* 🔑 關鍵修復：解除手機版的 max-width: 480px */
+        height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        align-items: stretch !important;
+        /* 讓按鈕填滿寬度 */
+        padding: 40px 0 !important;
+        background: #ffffff !important;
+        border-right: 1px solid rgba(26, 36, 54, 0.1) !important;
+        border-bottom: none !important;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.02) !important;
+        z-index: 9999 !important;
+    }
+
+    /* 側邊欄按鈕排版 */
+    .top-nav .nav-item {
+        display: flex !important;
+        flex-direction: row !important;
+        padding: 16px 32px !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        flex: none !important;
+        /* 取消 flex: 1 避免高度異常 */
+    }
+
+    .top-nav .nav-item i {
+        margin: 0 16px 0 0 !important;
+        font-size: 18px !important;
+    }
+
+    .top-nav .nav-item span {
+        font-size: 15px !important;
+    }
+
+    /* 🔑 關鍵美化：將底下的橫線改成側邊直條 */
+    .top-nav .nav-item.active::after {
+        left: 0 !important;
+        top: 15% !important;
+        bottom: auto !important;
+        width: 4px !important;
+        height: 70% !important;
+        border-radius: 0 4px 4px 0 !important;
+    }
+
+    /* 3. 主內容區塊：解除 480px 限制，自動推開側邊欄 */
+    .app-container {
+        max-width: 1600px !important;
+        /* 🔑 關鍵修復：解除 480px 限制，放寬到桌面尺寸 */
+        margin: 0 auto 0 240px !important;
+        /* 向右推開 240px 閃避側邊欄 */
+        width: calc(100% - 240px) !important;
+        padding: 40px 60px !important;
+        box-sizing: border-box !important;
+        position: relative !important;
+    }
+
+    /* 4. 網格系統：針對各頁面量身打造佈局 */
+
+    /* === 首頁 (Dashboard)：左寬右窄、卡片堆疊 === */
+    #dashboard-content {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) !important;
+        /* 🔑 關鍵修復 1：前兩張卡片高度根據內容決定 (max-content)，第三張吃掉剩餘空間 (1fr) */
+        grid-template-rows: max-content max-content 1fr !important;
+        gap: 24px !important;
+        align-items: start !important;
+        /* 🔑 關鍵修復 2：讓卡片靠上對齊，收合時高度才能自然縮小 */
+    }
+
+    /* 鎖定首頁第一張卡片 (資產配置圓餅圖) */
+    #dashboard-content>.card:nth-child(1) {
+        grid-column: 1 / 2 !important;
+        grid-row: 1 / span 3 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+        /* 🔑 解除高度綁架，不再跟隨右側清單拉長 */
+    }
+
+    /* 圓餅圖內部容器 */
+    .allocation-chart-container {
+        grid-column: auto !important;
+        width: 100% !important;
+        height: 400px !important;
+        /* 🔑 直接給予絕對高度，拒絕 Chart.js 動態算錯 */
+        min-height: auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin-top: 20px !important;
+    }
+
+    /* 鎖定首頁後面的三張卡片 (台股、美股、現金) */
+    #dashboard-content>.card:nth-child(n+2) {
+        grid-column: 2 / 3 !important;
+        margin-bottom: 0 !important;
+        height: auto !important;
+        /* 🔑 關鍵修復 3：改回 auto，讓卡片的外框高度跟隨內容收縮 */
+    }
+
+    /* 鎖定首頁最下方的三張長條圖卡片 */
+    #dashboard-content>.card:nth-child(n+5) {
+        grid-column: 1 / -1 !important;
+        /* 讓卡片橫跨整個網格寬度 */
+    }
+
+    /* === 追蹤頁面 (Tracking)：改為單欄，讓圖表擁有兩倍寬度 (滿版橫幅) === */
+    #tracking-content {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        /* 1fr 代表佔滿整行，寬度直接變兩倍 */
+        gap: 24px !important;
+        align-items: start !important;
+    }
+
+    /* === 記帳頁面 (Transactions)：上方滿版橫向表單，下方雙欄個股卡片 === */
+
+    /* 1. 取消外層網格，讓表單卡片能順利延伸 2 倍佔滿全寬 */
+    #transactions-content {
+        display: block !important;
+    }
+
+    /* 2. 重塑表單內部排版：把垂直疊放的欄位，改成橫向一字排開以縮減高度 */
+    #transactions-content>.card:first-child {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr 1fr auto !important;
+        /* 3 個輸入組 + 1 組按鈕 */
+        gap: 20px !important;
+        align-items: end !important;
+        /* 讓底部(輸入框與按鈕)完美貼齊 */
+        padding-bottom: 24px !important;
+        /* 收縮卡片底部留白 */
+    }
+
+    /* 表單標題霸佔整排 */
+    #transactions-content>.card:first-child>.card-header {
+        grid-column: 1 / -1 !important;
+        padding-bottom: 0 !important;
+        margin-bottom: 12px !important;
+    }
+
+    /* 若觸發「新增標的」，該區塊獨立一行避免擠壓 */
+    #transactions-content>.card:first-child>#new-stock-extra-fields {
+        grid-column: 1 / -1 !important;
+        margin-bottom: 0 !important;
+    }
+
+    /* 清除原本手機版的下邊距，交由 Grid 統一控制 */
+    #transactions-content>.card:first-child>.form-row {
+        margin-bottom: 0 !important;
+    }
+
+    /* 按鈕群組：排在最後一欄，並微調高度契合輸入框 */
+    #transactions-content>.card:first-child>div:last-child {
+        margin-top: 0 !important;
+        margin-bottom: 1px !important;
+        min-width: 170px !important;
+        /* 確保按鈕不會太小 */
+    }
+
+    #transactions-content>.card:first-child .btn-half {
+        padding: 9px !important;
+        /* 稍微縮減按鈕高度，讓它與左側輸入框更對齊 */
+    }
+
+    /* 暫存確認區卡片 (如果有觸發) 也一併維持滿版 */
+    #draft-tx-card {
+        margin-top: 24px !important;
+    }
+
+    /* 3. 將下方的個股歷史紀錄區改為「特定分類雙欄」 */
+    #stock-tx-histories {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-auto-flow: dense !important;
+        /* 🌟 關鍵黑魔法：強制將項目往最上方的空缺填補 */
+        gap: 24px !important;
+        align-items: start !important;
+        margin-top: 24px !important;
+    }
+
+    /* 偵測內部含有「台股專屬金」標籤的卡片，強制丟到左欄 */
+    #stock-tx-histories>.card.tx-card:has(span[style*="#C5A059"]) {
+        grid-column: 1 / 2 !important;
+    }
+
+    /* 偵測內部含有「美股專屬紅」標籤的卡片，強制丟到右欄 */
+    #stock-tx-histories>.card.tx-card:has(span[style*="#D96B6B"]) {
+        grid-column: 2 / 3 !important;
+    }
+
+    /* 確保所有卡片寬度正常不暴衝 */
+    .card {
+        width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 追蹤頁面的折線圖高度設定 */
+    .chart-container {
+        height: 350px !important;
+    }
+
+    /* 5. 頂部看板：橫向數據牆 (主淨值與副指標並排) */
+    .hero-section {
+        text-align: left !important;
+        padding: 0 0 30px 0 !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        /* 允許內部元素換行 */
+        align-items: flex-end !important;
+        /* 讓大數字跟旁邊的小字體「底部對齊」 */
+    }
+
+    /* 第一排：標題強制霸佔 100% 寬度 */
+    .hero-title {
+        width: 100% !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* 第二排左側：主淨值大數字 */
+    .hero-amount {
+        margin-bottom: 0 !important;
+        /* 移除原本下方的留白 */
+        margin-right: 60px !important;
+        /* 與右邊的副指標拉開舒適的距離 */
+        justify-content: flex-start !important;
+    }
+
+    /* 第二排右側：投資成本、報酬率、今日損益 */
+    .hero-sub-info {
+        margin-top: 0 !important;
+        margin-bottom: 8px !important;
+        /* 微調高度，讓它與左側大數字的視覺基準線完美切齊 */
+        gap: 40px !important;
+        justify-content: flex-start !important;
+    }
+
+    /* 副指標內的文字靠左對齊，更有報表感 */
+    .hero-sub-info div {
+        align-items: flex-start !important;
+    }
+
+    /* 防呆機制：如果看板內還有其他按鈕，強制把它們擠到第三排 */
+    .hero-section>*:not(.hero-title):not(.hero-amount):not(.hero-sub-info):not(.sync-btn-wrapper) {
+        width: 100% !important;
+        margin-top: 20px !important;
+    }
+
+    .hero-amount,
+    .hero-sub-info {
+        justify-content: flex-start !important;
+    }
+
+    .hero-sub-info {
+        gap: 40px !important;
+    }
+
+    /* 同步按鈕微調 */
+    .global-refresh-btn {
+        top: 40px !important;
+        right: 60px !important;
+    }
+
+    /* 資訊頁面四欄展開 */
+    .market-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+
+    /* 6. 修復分頁切換：確保被 JavaScript 標記隱藏的分頁絕對不顯示 */
+    #dashboard-content.hide,
+    #tracking-content.hide,
+    #history-content.hide,
+    #transactions-content.hide,
+    #info-content.hide,
+    #news-content.hide {
+        display: none !important;
+    }
+
+    /* === 資訊頁面 (Info)：全球市場監控標題列高度縮減 === */
+    .market-header {
+        padding: 15px 30px !important;
+        /* 🔑 關鍵：上下內距從原本的 30px 直接砍半為 15px */
+        border-radius: 16px !important;
+        /* 桌面端收斂底部圓角幅度，避免高度變矮時圓角變形 */
+        margin-bottom: 24px !important;
+        display: flex !important;
+        /* 啟動橫向排版 */
+        align-items: baseline !important;
+        /* 讓主副標題的文字底部完美切齊 */
+        justify-content: flex-start !important;
+        /* 統一靠左對齊，符合桌面閱讀動線 */
+        gap: 20px !important;
+        /* 主副標題之間的間距 */
+        text-align: left !important;
+    }
+
+    /* 消除原本垂直排列時產生的多餘邊距 */
+    .market-subtitle {
+        margin-bottom: 0 !important;
+        font-size: 14px !important;
+        /* 寬螢幕可稍微放大一點點副標題 */
+    }
+
+    .market-title {
+        margin-bottom: 0 !important;
+    }
+
+    #card-tw .card-header,
+    #card-us .card-header,
+    #card-cash .card-header {
+        /* 根據估算的原始高度增加約 10% 高度 */
+        min-height: 66px;
+        /* 確保內容垂直置中 */
+        align-items: center;
+    }
+}
+
+/* =========================================
+   橫向分佈長條圖 (Distribution Bar Chart)
+========================================= */
+.bar-chart-container {
+    margin-top: 16px;
+}
+
+.stacked-bar-wrapper {
+    display: flex;
+    width: 100%;
+    height: 24px;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--border-light);
+}
+
+.stacked-bar-segment {
+    height: 100%;
+    transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+    cursor: pointer;
+}
+
+.stacked-bar-segment:not(:last-child) {
+    border-right: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.stacked-bar-legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    margin-top: 16px;
+}
+
+.stacked-bar-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.legend-color-box {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.legend-label {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.legend-value {
+    font-weight: 700;
+    color: var(--text-navy);
+    font-family: 'Inter', sans-serif;
 }
