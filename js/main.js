@@ -634,6 +634,13 @@ const getChartOpt = () => ({
             enabled: false, // 🌟 關鍵 1：關閉原本內建在畫布裡面的提示框
             position: 'nearest',
             external: function (context) {
+                // 👇 新增這段判斷：如果是手機螢幕（寬度小於等於 768px），則直接隱藏並跳出
+                if (window.innerWidth <= 768) {
+                    let tooltipEl = document.getElementById('custom-chart-tooltip');
+                    if (tooltipEl) tooltipEl.style.opacity = 0;
+                    return;
+                }
+
                 // 🌟 關鍵 2：動態生成一個不受畫布限制的 HTML 提示區塊
                 let tooltipEl = document.getElementById('custom-chart-tooltip');
 
