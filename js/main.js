@@ -790,13 +790,13 @@ function renderDistributionCharts() {
     // --- 1. 台股組合持股分佈 ---
     const twDistContainer = $('tw-dist-bars');
     if (twDistContainer) {
-        const tsmcValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.6) + (getTwNetValue('00881') * 0.4);
-        const otherTechValue = (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.3) + (getTwNetValue('00878') * 0.6);
-        const nonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.1) + (getTwNetValue('00878') * 0.4);
+        const tsmcValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.58) + (getTwNetValue('00881') * 0.4);
+        const otherTechValue = (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.31) + (getTwNetValue('00878') * 0.59);
+        const nonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.11) + (getTwNetValue('00878') * 0.41);
 
         // 固定順序：TSMC概念 → 其他科技電子 → 傳產金融（不依金額排序）
         const twData = [
-            { label: 'TSMC 概念', value: tsmcValue, color: 'rgba(44, 58, 80, 0.7)' },
+            { label: 'TSMC 持股', value: tsmcValue, color: 'rgba(44, 58, 80, 0.7)' },
             { label: '其他科技電子', value: otherTechValue, color: '#5B8DB8' },
             { label: '傳產金融', value: nonTechValue, color: '#549B7B' }
         ];
@@ -806,13 +806,13 @@ function renderDistributionCharts() {
     // --- 2. 美股組合持股分佈 ---
     const usDistContainer = $('us-dist-bars');
     if (usDistContainer) {
-        const techSymbols = ['AAPL', 'GOOG', 'TSLA', 'QQQ', 'SMH', 'SPCX'];
+        const techSymbols = ['AAPL', 'GOOG', 'QQQ', 'SMH'];
         const usTechValue = techSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.35);
+            + (getUsNetValue('VTI') * 0.65);
 
         const nonTechSymbols = ['TLT', 'LQD'];
         const usNonTechValue = nonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.65);
+            + (getUsNetValue('VTI') * 0.35);
 
         const usData = [
             { label: '科技電子類股', value: usTechValue, color: '#5B8DB8' },
@@ -825,16 +825,16 @@ function renderDistributionCharts() {
     // --- 3. 總資產大類配比 ---
     const totalDistContainer = $('total-dist-bars');
     if (totalDistContainer) {
-        const twTechValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.6) + (getTwNetValue('00881') * 0.4)
-            + (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.3) + (getTwNetValue('00878') * 0.6);
-        const twNonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.1) + (getTwNetValue('00878') * 0.4);
+        const twTechValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.58) + (getTwNetValue('00881') * 0.4)
+            + (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.31) + (getTwNetValue('00878') * 0.59);
+        const twNonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.11) + (getTwNetValue('00878') * 0.41);
 
-        const usTechSymbols = ['AAPL', 'GOOG', 'TSLA', 'QQQ', 'SMH', 'SPCX'];
+        const usTechSymbols = ['AAPL', 'GOOG', 'QQQ', 'SMH'];
         const usTechValue = usTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.4);
+            + (getUsNetValue('VTI') * 0.65);
         const usNonTechSymbols = ['TLT', 'LQD'];
         const usNonTechValue = usNonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.6);
+            + (getUsNetValue('VTI') * 0.35);
 
         const cashValue = (appData.cash && !isNaN(appData.cash)) ? appData.cash : 0;
 
