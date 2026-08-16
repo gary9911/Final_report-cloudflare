@@ -27,7 +27,7 @@
             <i class="fa-solid fa-chart-line"></i><span>績效</span>
         </div>
         <div class="nav-item" onclick="navTo('transactions', this)">
-            <i class="fa-solid fa-list-check"></i><span>記帳</span>
+            <i class="fa-solid fa-pen-to-square"></i><span>編輯</span>
         </div>
         <div class="nav-item" onclick="navTo('info', this)">
             <i class="fa-solid fa-earth-asia"></i><span>資訊</span>
@@ -249,98 +249,64 @@
                 <div class="card">
                     <div class="card-header cursor-default pb-12">
                         <div class="card-title-group">
-                            <h2 class="card-title">交易流水紀錄</h2>
-                            <span class="card-subtitle">選擇現有標的或直接建立新監控</span>
+                            <h2 class="card-title">編輯持股部位</h2>
+                            <span class="card-subtitle">直接修改股數與成本，完成後儲存</span>
                         </div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-col">
-                            <span class="edit-label">標的代號</span>
-                            <select id="tx-symbol" class="edit-input"
-                                onchange="toggleNewStockFields(); updateCostPlaceholder();">
-                                <option value="">請選擇標目...</option>
-                                <optgroup label="快捷操作">
-                                    <option value="NEW_ACTION" style="color: var(--accent-gold); font-weight: bold;">+
-                                        新增監控標的...</option>
-                                </optgroup>
-                                <optgroup label="現有庫存" id="tx-symbol-list">
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div class="form-col">
-                            <span class="edit-label">動作類型</span>
-                            <select id="tx-type" class="edit-input">
-                                <option value="buy">買進 (Buy)</option>
-                                <option value="sell">賣出 (Sell)</option>
-                                <option value="div">配息 (Dividend)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div id="new-stock-extra-fields"
-                        style="display: none; background: rgba(26,36,54,0.03); padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #ccc;">
-                        <div class="form-row" style="margin-bottom: 0;">
-                            <div class="form-col">
-                                <span class="edit-label">市場</span>
-                                <select id="add-market" class="edit-input" onchange="updateCostPlaceholder()">
-                                    <option value="TW">台股 (TW)</option>
-                                    <option value="US">美股 (US)</option>
-                                </select>
-                            </div>
-                            <div class="form-col">
-                                <span class="edit-label">新標的代號</span>
-                                <input type="text" id="add-symbol" class="edit-input" placeholder="例如: 2330 或 TSLA">
+
+                    <!-- Cash editing section -->
+                    <div class="edit-item" style="background: rgba(197, 160, 89, 0.05); border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+                        <div class="edit-symbol" style="color: #C5A059;"><i class="fa-solid fa-sack-dollar"></i></div>
+                        <div class="edit-inputs">
+                            <div class="edit-input-wrapper">
+                                <span class="edit-label">現金部位 (TWD)</span>
+                                <input type="number" id="edit-page-cash-input" class="edit-input" value="0">
                             </div>
                         </div>
-                        <p style="font-size: 11px; color: #666; margin: 8px 0 0 4px;">* 此標的將在確認寫入後同步加入監控清單</p>
+                        <!-- Placeholder to align with remove buttons on stock items -->
+                        <div style="width: 50px;"></div>
                     </div>
-                    <div class="form-row">
-                        <div class="form-col">
-                            <span class="edit-label">交易日期</span>
-                            <input type="date" id="tx-date" class="edit-input">
+
+                    <!-- Container for editable holdings -->
+                    <div id="edit-holdings-list">
+                        <div class="empty-state" style="padding: 20px 15px;">持股清單載入中...</div>
+                        <!-- 
+                        JS will render items here. Example:
+                        <div class="edit-item" data-symbol="2330.TW">
+                            <div class="edit-symbol">2330.TW</div>
+                            <div class="edit-inputs">
+                                <div class="edit-input-wrapper">
+                                    <span class="edit-label">持有股數</span>
+                                    <input type="number" class="edit-input shares-input" value="1000">
+                                </div>
+                                <div class="edit-input-wrapper">
+                                    <span class="edit-label">平均成本</span>
+                                    <input type="number" step="any" class="edit-input cost-input" value="650.5">
+                                </div>
+                            </div>
+                            <button class="btn-remove-stock" onclick="removeHolding(this)"><i class="fa-solid fa-trash-can"></i></button>
                         </div>
-                        <div class="form-col">
-                            <span class="edit-label">成交股數</span>
-                            <input type="number" id="tx-shares" class="edit-input" placeholder="0"
-                                oninput="calcTxPrice()">
-                        </div>
+                        -->
                     </div>
-                    <div class="form-row">
-                        <div class="form-col">
-                            <span class="edit-label">總成交金額 (成本)</span>
-                            <input type="number" id="tx-cost" class="edit-input" placeholder="請輸入金額"
-                                oninput="calcTxPrice()">
-                        </div>
-                        <div class="form-col">
-                            <span class="edit-label">換算成交均價</span>
-                            <div id="tx-price"
-                                style="padding: 7px 9px; font-size:13px; color:var(--text-navy); font-weight:600; background:rgba(26,36,54,0.04); border-radius:8px; border: 1.5px solid transparent;">
-                                0
+
+                    <!-- Form to add a new holding -->
+                    <div class="edit-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 10px;">
+                        <div class="edit-symbol"><i class="fa-solid fa-plus"></i></div>
+                        <div class="edit-inputs">
+                            <div class="edit-input-wrapper">
+                                <span class="edit-label">新標的代號 (含市場)</span>
+                                <input type="text" id="new-holding-symbol" class="edit-input" placeholder="例如: 2330.TW 或 AAPL.US">
                             </div>
                         </div>
-                    </div>
-                    <div style="display:flex; gap:10px; margin-top:6px;">
-                        <button class="btn-half btn-clear" onclick="clearTxForm()">清空</button>
-                        <button class="btn-half btn-stage" onclick="handleStageTx()">寫入暫存</button>
+                        <button class="btn-cash-update" onclick="addHolding()">加入</button>
                     </div>
                 </div>
-                <div class="card hide" id="draft-tx-card">
-                    <div class="card-header cursor-default pb-8">
-                        <h2 class="card-title">暫存確認區</h2>
-                        <span class="card-subtitle">檢視即將更新的流水紀錄</span>
-                    </div>
-                    <div class="tx-grid tx-header">
-                        <div>日期</div>
-                        <div>動作</div>
-                        <div class="num text-right">股數</div>
-                        <div class="num text-right">股價</div>
-                        <div class="num text-right">金額</div>
-                        <div class="text-right">操作</div>
-                    </div>
-                    <div id="draft-tx-list"></div>
-                    <button class="btn-commit" onclick="commitTransactions()">確認發送至邊緣金庫</button>
-                </div>
-                <div id="stock-tx-histories"></div>
+
+                <button class="save-to-cloud-btn" id="save-holdings-btn" onclick="saveHoldings()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更
+                </button>
             </div>
+
             <div id="info-content" class="hide">
                 <div class="market-header">
                     <div class="market-subtitle">MARKET DASHBOARD</div>
