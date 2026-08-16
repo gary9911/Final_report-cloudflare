@@ -377,7 +377,7 @@ async function fetchPricesAndRender(forceRefresh = false) {
     renderApp();
     if (currentTab === 'edit') renderEditView();
     if (currentTab === 'tracking') renderTrackingChart();
-    if (currentTab === 'transactions') renderTxView();
+    if (currentTab === 'transactions') renderEditHoldingsView();
 }
 
 async function refreshData(forceRefresh = false) {
@@ -589,7 +589,7 @@ function navTo(target, el) {
     if (target === 'dashboard') renderAllocationChart();
     else if (target === 'history' && !isHistoryLoaded && (appData.twStocks.length > 0 || appData.usStocks.length > 0)) loadHistoryData();
     else if (target === 'tracking') renderTrackingChart();
-    else if (target === 'transactions') renderTxView();
+    else if (target === 'transactions') renderEditHoldingsView();
     else if (target === 'info') renderInfoView();
     else if (target === 'news') {
         if (appData.news.length === 0) fetchNewsData();
@@ -1354,332 +1354,208 @@ function renderHistory() {
     div.innerHTML = h;
 }
 
-function calcTxPrice() {
-    const sh = parseFloat($('tx-shares').value);
-    const co = parseFloat($('tx-cost').value);
-    $('tx-price').innerText = (sh && co && sh > 0) ? fmtMax2(co / sh) : '0';
-}
+function renderEditHoldingsView() {
+    const container = $('edit-holdings-list');
+    if (!container) return;
 
-function clearTxForm() {
-    $('tx-shares').value = '';
-    $('tx-cost').value = '';
-    $('tx-price').innerText = '0';
-    $('tx-date').value = new Date().toISOString().split('T')[0];
-}
+    const cashInput = $('edit-page-cash-input');
+    if (cashInput) {
+        cashInput.value = appData.cash;
+    }
 
-function renderDraftTxs() {
-    const dCard = $('draft-tx-card'), dList = $('draft-tx-list');
-    if (!draftTxs.length) {
-        dCard.classList.add('hide');
+    const allHoldings = [
+        ...appData.twStocks.map(s => ({ ...s, market: 'TW' })),
+        ...appData.usStocks.map(s => ({ ...s, market: 'US' }))
+    ];
+
+    if (allHoldings.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding: 20px 15px;">無持股資料，請點擊下方加入。</div>`;
         return;
     }
-    dCard.classList.remove('hide');
 
-    const types = { buy: ['買進', 'tag-buy'], sell: ['賣出', 'tag-sell'], div: ['配息', 'tag-div'] };
-
-    dList.innerHTML = draftTxs.map((draft, idx) => {
-        const tx = draft.action === 'delete' ? draft.originalTx : draft;
-        const tag = types[tx.type] || ['未知', ''];
-        const actionText = draft.action === 'delete'
-            ? `<span class="tx-deleted-text">[刪除]</span><br>`
-            : `<span class="tx-added-text">[新增]</span><br>`;
-        const priceStr = tx.price ? fmtMax2(tx.price) : '-';
-        const costStr = fmtMax2(tx.cost);
+    container.innerHTML = allHoldings.map(holding => {
+        const symbolWithMarket = `${holding.symbol}.${holding.market}`;
+        const marketLabel = holding.market === 'TW'
+            ? `<span style="color: #C5A059; font-size: 0.65em; font-weight: 600;">台股</span>`
+            : `<span style="color: #D96B6B; font-size: 0.65em; font-weight: 600;">美股</span>`;
 
         return `
-                    <div class="tx-grid" ${draft.action === 'delete' ? 'style="opacity:0.7; text-decoration:line-through;"' : ''}>
-                        <div class="num">${tx.date.substring(5)}<br><span class="symbol-mini">${tx.symbol}</span></div>
-                        <div>${actionText}<span class="tx-tag ${tag[1]}">${tag[0]}</span></div>
-                        <div class="num text-right">${fmtMax3(tx.shares) || '-'}</div>
-                        <div class="num text-right">${priceStr}</div>
-                        <div class="num text-right">${costStr}</div>
-                        <div class="text-right"><button class="tx-action-btn" onclick="removeDraft(${idx})" title="取消"><i class="fa-solid fa-xmark"></i></button></div>
-                    </div>
-                `;
+        <div class="edit-item" data-symbol="${symbolWithMarket}">
+            <div class="edit-symbol" style="line-height: 1.3;">${marketLabel}<br>${holding.symbol}</div>
+            <div class="edit-inputs">
+                <div class="edit-input-wrapper">
+                    <span class="edit-label">持有股數</span>
+                    <input type="number" class="edit-input shares-input" value="${holding.shares}">
+                </div>
+                <div class="edit-input-wrapper">
+                    <span class="edit-label">平均成本</span>
+                    <input type="number" step="any" class="edit-input cost-input" value="${holding.costPrice.toFixed(4)}">
+                </div>
+            </div>
+            <button class="btn-remove-stock" onclick="removeHolding(this)"><i class="fa-solid fa-trash-can"></i></button>
+        </div>
+        `;
     }).join('');
 }
 
-function stageTx() {
-    const sym = $('tx-symbol').value;
-    const type = $('tx-type').value;
-    const date = $('tx-date').value;
-    const sh = parseFloat($('tx-shares').value) || 0;
-    const co = parseFloat($('tx-cost').value) || 0;
-
-    if (!sym || !date || (!sh && type !== 'div') || !co) return showToast('⚠️ 請填寫完整交易資訊');
-
-    draftTxs.push({
-        action: 'add',
-        id: Date.now().toString(),
-        symbol: sym,
-        type: type,
-        date: date,
-        shares: sh,
-        cost: co,
-        price: sh ? co / sh : 0
-    });
-    clearTxForm();
-    renderTxView();
-    showToast('✏️ 已寫入新增暫存');
-}
-
-function deleteDBTx(id) {
-    const tx = appData.transactions.find(t => t.id === id);
-    if (!tx) return;
-    if (draftTxs.find(d => d.action === 'delete' && d.originalTx.id === id)) return showToast('⚠️ 已在暫存區');
-
-    draftTxs.push({ action: 'delete', originalTx: tx, symbol: tx.symbol });
-    renderTxView();
-
-    const card = $(`tx-card-${tx.symbol}`);
-    if (card && !card.classList.contains('expanded')) toggleCard(`tx-card-${tx.symbol}`);
-    showToast('🗑️ 已排入刪除暫存，請確認寫入');
-}
-
-function editDBTx(id) {
-    const tx = appData.transactions.find(t => t.id === id);
-    if (!tx) return;
-
-    $('tx-symbol').value = tx.symbol;
-    $('tx-type').value = tx.type;
-    $('tx-date').value = tx.date;
-    $('tx-shares').value = tx.shares;
-    $('tx-cost').value = tx.cost;
-    calcTxPrice();
-
-    deleteDBTx(id);
-    showToast('✏️ 已載入表單，舊紀錄排入刪除暫存');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function removeDraft(idx) {
-    draftTxs.splice(idx, 1);
-    renderTxView();
-}
-
-async function commitTransactions() {
-    if (!draftTxs.length) return;
-
-    draftTxs.forEach(draft => {
-        const isTW = appData.twStocks.find(s => s.symbol === draft.symbol || (draft.originalTx && s.symbol === draft.originalTx.symbol));
-        const stock = isTW || appData.usStocks.find(s => s.symbol === draft.symbol || (draft.originalTx && s.symbol === draft.originalTx.symbol));
-
-        if (draft.action === 'delete') {
-            const tx = draft.originalTx;
-            if (stock) {
-                if (tx.type === 'buy') {
-                    const totalCost = (stock.shares * stock.costPrice) - tx.cost;
-                    stock.shares = Math.max(0, stock.shares - tx.shares);
-                    stock.costPrice = stock.shares > 0 ? Math.max(0, totalCost / stock.shares) : 0;
-                } else if (tx.type === 'sell') {
-                    stock.shares += tx.shares;
-                }
-            }
-            appData.transactions = appData.transactions.filter(t => t.id !== tx.id);
-
-        } else if (draft.action === 'add') {
-            const tx = draft;
-            if (stock) {
-                if (tx.type === 'buy') {
-                    const totalCost = (stock.shares * stock.costPrice) + tx.cost;
-                    stock.shares += tx.shares;
-                    stock.costPrice = stock.shares > 0 ? totalCost / stock.shares : 0;
-                } else if (tx.type === 'sell') {
-                    stock.shares -= tx.shares;
-                    if (stock.shares <= 0) { stock.shares = 0; stock.costPrice = 0; }
-                }
-            }
-            appData.transactions.push({
-                id: tx.id,
-                symbol: tx.symbol,
-                type: tx.type,
-                date: tx.date,
-                shares: tx.shares,
-                cost: tx.cost,
-                price: tx.price
-            });
-        }
-    });
-
-    draftTxs = [];
-    renderApp();
-    renderTxView();
-    await saveToCloud();
-    showToast('🏦 交易已寫入並同步庫存！(現金請手動調整)');
-}
-
-window.onload = () => refreshData(false);
-
-function updateCostPlaceholder() {
-    const symbolSelect = $('tx-symbol');
-    const costInput = $('tx-cost');
-    const selectedVal = symbolSelect.value;
-
-    if (selectedVal === 'NEW_ACTION') {
-        const market = $('add-market').value;
-        costInput.placeholder = (market === 'US') ? "請輸入美金總額 (USD)" : "請輸入台幣總額 (TWD)";
+function addHolding() {
+    const symbolInput = $('new-holding-symbol');
+    const fullSymbol = symbolInput.value.trim().toUpperCase();
+    if (!fullSymbol || !fullSymbol.includes('.')) {
+        showToast('⚠️ 請輸入完整代號 (例如: 2330.TW 或 AAPL.US)');
+        return;
     }
-    else if (selectedVal === '') {
-        costInput.placeholder = "請選擇標的";
-    }
-    else {
-        const isUS = appData.usStocks.some(s => s.symbol === selectedVal);
-        costInput.placeholder = isUS ? "請輸入美金總額 (USD)" : "請輸入台幣總額 (TWD)";
-    }
-}
 
-function toggleNewStockFields() {
-    const symbolSelect = $('tx-symbol');
-    const extraFields = $('new-stock-extra-fields');
+    const [symbol, market] = fullSymbol.split('.');
+    if (!symbol || !['TW', 'US'].includes(market)) {
+        showToast('⚠️ 市場別錯誤，僅支援 .TW 或 .US');
+        return;
+    }
 
-    if (symbolSelect.value === 'NEW_ACTION') {
-        extraFields.style.display = 'block';
+    const exists = [...appData.twStocks, ...appData.usStocks].some(s => s.symbol === symbol);
+    if (exists) {
+        showToast(`⚠️ ${symbol} 已存在於持股清單中`);
+        return;
+    }
+
+    const newHolding = {
+        symbol: symbol,
+        shares: 0,
+        costPrice: 0,
+        currentPrice: null,
+        prevClose: null,
+        isError: true
+    };
+
+    if (market === 'TW') {
+        appData.twStocks.push(newHolding);
     } else {
-        extraFields.style.display = 'none';
+        appData.usStocks.push(newHolding);
     }
-    updateCostPlaceholder();
+
+    renderEditHoldingsView();
+    showToast(`✅ 已加入 ${fullSymbol}，請填寫股數與成本後儲存`);
+    symbolInput.value = '';
 }
 
-async function handleStageTx() {
-    const symbolSelect = $('tx-symbol');
-    let targetSymbol = symbolSelect.value;
+function removeHolding(buttonElement) {
+    const itemElement = buttonElement.closest('.edit-item');
+    if (!itemElement) return;
 
-    if (targetSymbol === 'NEW_ACTION') {
-        const market = $('add-market').value;
-        const newSym = $('add-symbol').value.trim().toUpperCase();
+    const fullSymbol = itemElement.getAttribute('data-symbol');
+    if (!confirm(`確定要從編輯列表中移除 ${fullSymbol} 嗎？\n此操作不會立即儲存，需點擊下方儲存按鈕才會生效。`)) {
+        return;
+    }
 
-        if (!newSym) return alert("請輸入新標的代號！");
+    itemElement.remove();
+    showToast(`🗑️ 已從列表移除 ${fullSymbol}，請記得儲存變更`);
 
-        const exists = [...appData.twStocks, ...appData.usStocks].some(s => s.symbol === newSym);
-        if (exists) {
-            alert("此標的已在庫存中，請直接從下拉選單選擇。");
-            symbolSelect.value = newSym;
-            toggleNewStockFields();
+    const container = $('edit-holdings-list');
+    if (container.children.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding: 20px 15px;">無持股資料，請點擊下方加入。</div>`;
+    }
+}
+
+async function saveHoldings() {
+    const saveBtn = $('save-holdings-btn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 儲存中...';
+
+    const newTwStocks = [];
+    const newUsStocks = [];
+    const holdingElements = document.querySelectorAll('#edit-holdings-list .edit-item');
+
+    let hasError = false;
+    holdingElements.forEach(el => {
+        const fullSymbol = el.getAttribute('data-symbol');
+        const shares = parseFloat(el.querySelector('.shares-input').value);
+        const costPrice = parseFloat(el.querySelector('.cost-input').value);
+
+        if (!fullSymbol || isNaN(shares) || isNaN(costPrice)) {
+            hasError = true;
             return;
         }
 
-        const obj = {
-            symbol: market === 'TW' ? newSym.replace(/\.TW$|\.TWO$/i, '') : newSym,
-            shares: 0,
-            costPrice: 0,
+        const [symbol, market] = fullSymbol.split('.');
+
+        const holding = {
+            symbol: symbol,
+            shares: shares,
+            costPrice: costPrice,
             currentPrice: null,
             prevClose: null,
             isError: true
         };
 
-        appData[market === 'TW' ? 'twStocks' : 'usStocks'].push(obj);
+        if (market === 'TW') {
+            newTwStocks.push(holding);
+        } else if (market === 'US') {
+            newUsStocks.push(holding);
+        }
+    });
 
-        addChangelog('add', obj.symbol, `建立新標的 (${market})`);
-
-        renderTxView();
-
-        $('tx-symbol').value = obj.symbol;
-        toggleNewStockFields();
-
-        fetchPricesAndRender();
-
-        targetSymbol = obj.symbol;
-    }
-
-    stageTx();
-}
-
-function renderTxView() {
-    const twStocks = appData.twStocks || [];
-    const usStocks = appData.usStocks || [];
-    const sel = $('tx-symbol');
-
-    const currentVal = sel.value;
-
-    let optionsHtml = `
-        <option value="">請選擇標的...</option>
-        <optgroup label="快捷操作">
-            <option value="NEW_ACTION">+ 新增監控標的...</option>
-        </optgroup>
-    `;
-
-    if (twStocks.length > 0) {
-        optionsHtml += `<optgroup label="台股庫存">`;
-        optionsHtml += twStocks.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
-        optionsHtml += `</optgroup>`;
-    }
-
-    if (usStocks.length > 0) {
-        optionsHtml += `<optgroup label="美股庫存">`;
-        optionsHtml += usStocks.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join('');
-        optionsHtml += `</optgroup>`;
-    }
-
-    sel.innerHTML = optionsHtml;
-
-    if (currentVal) sel.value = currentVal;
-
-    if (!$('tx-date').value) $('tx-date').value = new Date().toISOString().split('T')[0];
-
-    renderDraftTxs();
-
-    const histDiv = $('stock-tx-histories');
-    const allStocks = [...twStocks, ...usStocks];
-    if (!allStocks.length) {
-        histDiv.innerHTML = '<div class="empty-state">目前無持股可顯示紀錄</div>';
+    if (hasError) {
+        showToast('❌ 部分資料格式錯誤，請檢查後再儲存');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更';
         return;
     }
 
-    const types = { buy: ['買進', 'tag-buy'], sell: ['賣出', 'tag-sell'], div: ['配息', 'tag-div'] };
-    let histHtml = '';
+    const cashInput = $('edit-page-cash-input');
+    const newCashValue = parseFloat(cashInput.value);
 
-    allStocks.forEach(s => {
-        const stTxs = (appData.transactions || []).filter(t => t.symbol === s.symbol).sort((a, b) => new Date(b.date) - new Date(a.date));
+    if (isNaN(newCashValue)) {
+        showToast('❌ 現金部位格式錯誤，請檢查後再儲存');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更';
+        return;
+    }
 
-        const isTW = twStocks.some(tw => tw.symbol === s.symbol);
-        const marketLabel = isTW
-            ? `<span style="color: #C5A059; margin-right: 8px; font-size: 0.65em;vertical-align: middle">台股</span>`
-            : `<span style="color: #D96B6B; margin-right: 8px; font-size: 0.65em;vertical-align: middle">美股</span>`;
+    // Update local appData with all changes from the page
+    appData.cash = newCashValue;
+    appData.twStocks = newTwStocks;
+    appData.usStocks = newUsStocks;
 
-        histHtml += `
-            <div class="card tx-card" id="tx-card-${s.symbol}">
-                <div class="card-header tx-stock-header cursor-default mb-0" onclick="toggleCard('tx-card-${s.symbol}')">
-                    <div>
-                        <h2 class="card-title">${marketLabel}${s.symbol}</h2>
-                        <span class="card-subtitle">總股數: <strong class="num">${fmtMax3(s.shares)}</strong></span>
-                    </div>
-                    <div style="display:flex; align-items:flex-end;">
-                        <div class="text-right">
-                            <div class="card-subtitle">均價: <strong class="num">${fmtMax2(s.costPrice)}</strong></div>
-                            <div class="card-subtitle">總成本: <strong class="num">${fmtMax2(s.costPrice * s.shares)}</strong></div>
-                        </div>
-                        <i class="fa-solid fa-chevron-down tx-expand-icon"></i>
-                    </div>
-                </div>
-                <div class="list-container">
-                    <div style="padding-top:8px;">
-                        <div class="tx-grid tx-header">
-                            <div>日期</div><div>動作</div><div class="num text-right">股數</div>
-                            <div class="num text-right">股價</div><div class="num text-right">金額</div><div class="text-right">操作</div>
-                        </div>
-                        ${stTxs.map(tx => {
-            const tag = types[tx.type] || ['未知', ''];
-            const isDeleting = draftTxs.some(d => d.action === 'delete' && d.originalTx.id === tx.id);
-            return `
-                                <div class="tx-grid ${isDeleting ? 'tx-deleted' : ''}">
-                                    <div class="num">${tx.date.substring(5)}</div>
-                                    <div><span class="tx-tag ${tag[1]}">${tag[0]}</span></div>
-                                    <div class="num text-right">${fmtMax3(tx.shares) || '-'}</div>
-                                    <div class="num text-right">${tx.price ? fmtMax2(tx.price) : '-'}</div>
-                                    <div class="num text-right">${fmtMax2(tx.cost)}</div>
-                                    <div class="text-right">
-                                        ${isDeleting ? '<span style="font-size:10px;">待刪</span>' : `
-                                        <button class="tx-action-btn" onclick="editDBTx('${tx.id}')"><i class="fa-solid fa-pen"></i></button>
-                                        <button class="tx-action-btn" onclick="deleteDBTx('${tx.id}')"><i class="fa-solid fa-trash"></i></button>`}
-                                    </div>
-                                </div>
-                            `;
-        }).join('')}
-                    </div>
-                </div>
-            </div>`;
-    });
-    histDiv.innerHTML = histHtml;
+    const payload = {
+        cash: appData.cash, // Now contains the updated value
+        netWorthHistory: appData.netWorthHistory,
+        transactions: appData.transactions,
+        holdings: [
+            ...appData.twStocks.map(s => ({ market: 'TW', symbol: s.symbol, shares: s.shares, costPrice: s.costPrice })),
+            ...appData.usStocks.map(s => ({ market: 'US', symbol: s.symbol, shares: s.shares, costPrice: s.costPrice }))
+        ]
+    };
+
+    try {
+        const res = await fetch(DB_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Master-Key': SECRET_KEY },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            throw new Error(`伺服器回應錯誤 (${res.status})`);
+        }
+
+        const result = await res.json();
+        if (result.success) {
+            showToast('✅ 持股資料已成功同步至雲端！');
+            isHistoryLoaded = false;
+            try {
+                await fetchPricesAndRender();
+            } catch (refreshError) {
+                showToast('⚠️ 同步成功，但價格刷新失敗，請手動刷新。');
+                console.error("Error during post-save refresh:", refreshError);
+            }
+        } else {
+            throw new Error(result.error || '儲存失敗');
+        }
+    } catch (e) {
+        showToast(`❌ 儲存至雲端失敗: ${e.message}`);
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更';
+    }
 }
 
 async function fetchBenchmarkData() {
@@ -1703,6 +1579,8 @@ async function fetchBenchmarkData() {
         return null;
     }
 }
+
+window.onload = () => refreshData(false);
 
 async function fetchNewsData() {
     const listDiv = document.querySelector('#news-content .news-list');
