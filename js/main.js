@@ -817,7 +817,7 @@ function renderDistributionCharts() {
         const usTechValue = techSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
             + (getUsNetValue('VTI') * 0.65);
 
-        const nonTechSymbols = ['TLT', 'LQD'];
+        const nonTechSymbols = ['SGOV', 'LQD'];
         const usNonTechValue = nonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
             + (getUsNetValue('VTI') * 0.35);
 
@@ -839,7 +839,7 @@ function renderDistributionCharts() {
         const usTechSymbols = ['AAPL', 'GOOG', 'QQQ', 'SMH'];
         const usTechValue = usTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
             + (getUsNetValue('VTI') * 0.65);
-        const usNonTechSymbols = ['TLT', 'LQD'];
+        const usNonTechSymbols = ['SGOV', 'LQD'];
         const usNonTechValue = usNonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
             + (getUsNetValue('VTI') * 0.35);
 
