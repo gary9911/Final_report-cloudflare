@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>高奢菁英 | 總資產指揮中心 V25</title>
+    <title>高奢菁英 | 總資產指揮中心 V4.3</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#FDFCF8">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,6 +13,95 @@
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="stylesheet" href="css/all.min.css">
     <link rel="stylesheet" href="css/my-css.css">
+    <style>
+        /* V4.2 資產配比與樣式優化 */
+        .allocation-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .tag-in-range { background: rgba(84, 155, 123, 0.15); color: #2D6A4F; }
+        .tag-need-buy { background: rgba(197, 160, 89, 0.15); color: #9E7D3B; }
+        .tag-need-trim { background: rgba(217, 107, 107, 0.15); color: #B33939; }
+        .tag-hard-cap { background: #B33939; color: #FFF; animation: pulse 1.5s infinite; }
+
+        .compare-bar-container {
+            margin: 15px 0 10px;
+        }
+        .compare-bar-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .stacked-bar-multi {
+            height: 18px;
+            border-radius: 6px;
+            overflow: hidden;
+            display: flex;
+            background: #EAE3D2;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .bar-seg {
+            height: 100%;
+            transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+            position: relative;
+        }
+        .bar-seg-core { background-color: #2C3E50; }
+        .bar-seg-growth { background-color: #5B8DB8; }
+        .bar-seg-alpha { background-color: #D96B6B; }
+        .bar-seg-cash { background-color: #C5A059; }
+
+        .bucket-card {
+            border-left: 4px solid var(--border-light);
+            transition: all 0.3s ease;
+        }
+        .bucket-card.bucket-core { border-left-color: #2C3E50; }
+        .bucket-card.bucket-growth { border-left-color: #5B8DB8; }
+        .bucket-card.bucket-alpha { border-left-color: #D96B6B; }
+        .bucket-card.bucket-cash { border-left-color: #C5A059; }
+
+        .alert-banner {
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .alert-banner.alert-warning {
+            background: rgba(197, 160, 89, 0.12);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            color: #6A5328;
+        }
+        .alert-banner.alert-danger {
+            background: rgba(217, 107, 107, 0.12);
+            border: 1px solid rgba(217, 107, 107, 0.3);
+            color: #8C2525;
+        }
+        .alert-banner.alert-ok {
+            background: rgba(84, 155, 123, 0.12);
+            border: 1px solid rgba(84, 155, 123, 0.3);
+            color: #2D6A4F;
+        }
+
+        .bucket-sub-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px dashed var(--border-light);
+            font-size: 13px;
+        }
+        .bucket-sub-item:last-child { border-bottom: none; }
+    </style>
 </head>
 
 <body>
@@ -20,25 +109,26 @@
         <div class="nav-item active" onclick="navTo('dashboard', this)">
             <i class="fa-solid fa-house-chimney-window"></i><span>首頁</span>
         </div>
+        <div class="nav-item" onclick="navTo('allocation', this)">
+            <i class="fa-solid fa-cubes-stacked"></i><span>配比</span>
+        </div>
         <div class="nav-item" onclick="navTo('tracking', this)">
             <i class="fa-solid fa-chart-area"></i><span>追蹤</span>
         </div>
         <div class="nav-item" onclick="navTo('history', this)">
             <i class="fa-solid fa-chart-line"></i><span>績效</span>
         </div>
-        <div class="nav-item" onclick="navTo('transactions', this)">
-            <i class="fa-solid fa-pen-to-square"></i><span>編輯</span>
-        </div>
         <div class="nav-item" onclick="navTo('info', this)">
             <i class="fa-solid fa-earth-asia"></i><span>資訊</span>
         </div>
-        <div class="nav-item" onclick="navTo('news', this)">
-            <i class="fa-regular fa-newspaper"></i><span>新聞</span>
+        <div class="nav-item" onclick="navTo('transactions', this)">
+            <i class="fa-solid fa-pen-to-square"></i><span>編輯</span>
         </div>
     </nav>
+
     <div class="app-container">
 
-        <div class="global-refresh-btn" onclick="refreshData(true); if(currentTab === 'news') fetchNewsData();">
+        <div class="global-refresh-btn" onclick="refreshData(true);">
             <i class="fa-solid fa-arrow-rotate-right" id="syncBtn"></i>
         </div>
 
@@ -52,17 +142,20 @@
                 <div><span>今日損益</span><strong class="num" id="today-profit">--</strong></div>
             </div>
         </header>
+
         <main id="main-content">
+            <!-- 1. 首頁 (Dashboard) -->
             <div id="dashboard-content">
                 <div class="card cursor-default">
                     <div class="card-header mb-0">
                         <div class="card-title-group">
                             <h2 class="card-title">資產配置比例</h2>
-                            <span class="card-subtitle">投資組合與現金分配</span>
+                            <span class="card-subtitle">投資組合與現金分配 (標註整數佔比)</span>
                         </div>
                     </div>
                     <div class="allocation-chart-container"><canvas id="allocationChart"></canvas></div>
                 </div>
+
                 <div class="card" id="card-tw" onclick="toggleCard('card-tw')">
                     <div class="card-header">
                         <div class="card-title-group">
@@ -77,6 +170,7 @@
                     <div class="list-container" id="tw-list"></div>
                     <div class="card-footer-time" id="tw-update-time">來源報價：連線中...</div>
                 </div>
+
                 <div class="card" id="card-us" onclick="toggleCard('card-us')">
                     <div class="card-header">
                         <div class="card-title-group">
@@ -91,6 +185,7 @@
                     <div class="list-container" id="us-list"></div>
                     <div class="card-footer-time" id="us-update-time">來源報價：連線中...</div>
                 </div>
+
                 <div class="card" id="card-cash">
                     <div class="card-header cursor-default">
                         <div class="card-title-group">
@@ -102,7 +197,7 @@
                             <div style="margin-top: 4px;">
                                 <button class="hero-btn mb-0"
                                     style="padding: 2px 8px; font-size: 11px; min-height: auto;"
-                                    onclick="const newVal = prompt('請輸入新的現金總額 (TWD):', document.getElementById('edit-cash-input').value); if(newVal !== null && newVal !== '') { document.getElementById('edit-cash-input').value = newVal; saveCash(); }">
+                                    onclick="const newVal = prompt('請輸入新的現金總額 (TWD):', appData.cash); if(newVal !== null && newVal !== '') { $('edit-cash-input').value = newVal; saveCash(); }">
                                     <i class="fa-solid fa-pen-to-square"></i> 手動更新
                                 </button>
                             </div>
@@ -110,52 +205,79 @@
                     </div>
                     <div class="card-footer-time">&nbsp;</div>
                 </div>
-                <div class="card">
-                    <div class="card-header cursor-default mb-0">
-                        <div class="card-title-group">
-                            <h2 class="card-title">台股組合持股分佈</h2>
-                            <span class="card-subtitle">依市值佔比排列</span>
-                        </div>
-                    </div>
-                    <div class="bar-chart-container" id="tw-dist-bars">
-                        <div class="empty-state" style="padding: 10px 0;">資料計算中...</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header cursor-default mb-0">
-                        <div class="card-title-group">
-                            <h2 class="card-title">美股組合持股分佈</h2>
-                            <span class="card-subtitle">依市值佔比排列</span>
-                        </div>
-                    </div>
-                    <div class="bar-chart-container" id="us-dist-bars">
-                        <div class="empty-state" style="padding: 10px 0;">資料計算中...</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-header cursor-default mb-0">
-                        <div class="card-title-group">
-                            <h2 class="card-title">總資產大類配比</h2>
-                            <span class="card-subtitle">股票、現金與其他</span>
-                        </div>
-                    </div>
-                    <div class="bar-chart-container" id="total-dist-bars">
-                        <div class="empty-state" style="padding: 10px 0;">資料計算中...</div>
-                    </div>
-                </div>
             </div>
+
+            <!-- 2. 資產配比 (Allocation) 【四桶投資框架】 -->
+            <div id="allocation-content" class="hide">
+                <!-- 即時行動與再平衡看板 -->
+                <div id="rebalance-alert-box">
+                    <div class="alert-banner alert-ok">
+                        <i class="fa-solid fa-circle-check mt-2"></i>
+                        <div><strong>區塊配置皆在安全警示區間內</strong><br>請維持紀律，中間的市場波動不構成動作條件。</div>
+                    </div>
+                </div>
+
+                <!-- 雙層對比進度條 -->
+                <div class="card cursor-default">
+                    <div class="card-header mb-0">
+                        <div class="card-title-group">
+                            <h2 class="card-title">戰略配置對比</h2>
+                            <span class="card-subtitle">即時比例 vs. 目標中位基準線</span>
+                        </div>
+                    </div>
+
+                    <div class="compare-bar-container">
+                        <div class="compare-bar-label">
+                            <span>當前實際配比</span>
+                            <span id="alloc-actual-summary">計算中...</span>
+                        </div>
+                        <div class="stacked-bar-multi" id="alloc-actual-bar">
+                            <div class="bar-seg bar-seg-core" style="width: 42%;"></div>
+                            <div class="bar-seg bar-seg-growth" style="width: 23%;"></div>
+                            <div class="bar-seg bar-seg-alpha" style="width: 12%;"></div>
+                            <div class="bar-seg bar-seg-cash" style="width: 23%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="compare-bar-container" style="margin-top: 15px;">
+                        <div class="compare-bar-label">
+                            <span>目標中位基準</span>
+                            <span>Core 42% ｜ Growth 23% ｜ Alpha 12% ｜ 現金/債 23%</span>
+                        </div>
+                        <div class="stacked-bar-multi">
+                            <div class="bar-seg bar-seg-core" style="width: 42%;" title="Core Beta: 42%"></div>
+                            <div class="bar-seg bar-seg-growth" style="width: 23%;" title="Growth Beta: 23%"></div>
+                            <div class="bar-seg bar-seg-alpha" style="width: 12%;" title="Alpha: 12%"></div>
+                            <div class="bar-seg bar-seg-cash" style="width: 23%;" title="現金/債: 23%"></div>
+                        </div>
+                    </div>
+
+                    <div class="stacked-bar-legend" style="margin-top: 15px;">
+                        <div class="stacked-bar-legend-item"><span class="legend-color-box" style="background-color: #2C3E50;"></span><span class="legend-label">Core Beta</span></div>
+                        <div class="stacked-bar-legend-item"><span class="legend-color-box" style="background-color: #5B8DB8;"></span><span class="legend-label">Growth Beta</span></div>
+                        <div class="stacked-bar-legend-item"><span class="legend-color-box" style="background-color: #D96B6B;"></span><span class="legend-label">Alpha</span></div>
+                        <div class="stacked-bar-legend-item"><span class="legend-color-box" style="background-color: #C5A059;"></span><span class="legend-label">現金／債</span></div>
+                    </div>
+                </div>
+
+                <!-- 四大桶明細卡片清單 (支援展開) -->
+                <div id="bucket-cards-list"></div>
+            </div>
+
+            <!-- 3. 追蹤 (Tracking) -->
             <div id="tracking-content" class="hide">
                 <div class="card mt-10">
                     <div class="card-header cursor-default pb-8 align-center">
                         <div class="card-title-group">
                             <h2 class="card-title">總資產趨勢</h2>
-                            <span class="card-subtitle">對應當下總資產淨值</span>
+                            <span class="card-subtitle">對齊起始點 006208 / SPY 基準線</span>
                         </div>
                         <button class="hero-btn active-hero mb-0" style="padding:8px 14px;" id="saveNwBtn"
                             onclick="saveCurrentNetWorth()">💾 紀錄現值</button>
                     </div>
                     <div class="chart-container" id="nw-box"><canvas id="netWorthChart"></canvas></div>
                 </div>
+
                 <div class="mid-hero-section" id="stock-hero">
                     <div class="hero-title color-down">股票資產總淨值</div>
                     <div class="hero-amount hero-amount-large">
@@ -183,24 +305,27 @@
                 <div class="card">
                     <div class="card-header cursor-default pb-8">
                         <div class="card-title-group">
-                            <h2 class="card-title">現金水位趨勢</h2>
-                            <span class="card-subtitle">對應試算表 Cash 欄位</span>
+                            <h2 class="card-title">現金資產水位趨勢</h2>
+                            <span class="card-subtitle">防禦緩衝走勢</span>
                         </div>
                     </div>
                     <div class="chart-container" id="cs-box"><canvas id="cashNetChart"></canvas></div>
                 </div>
             </div>
+
+            <!-- 4. 績效 (History) 【新增5日(%)按鈕 · 欄位順序優化】 -->
             <div id="history-content" class="hide">
                 <div class="history-controls">
                     <button class="hero-btn" onclick="setHeroMode('d1Pct', this)">日漲跌%</button>
-                    <button class="hero-btn" onclick="setHeroMode('d1Profit', this)">日獲利排行</button>
-                    <button class="hero-btn" onclick="setHeroMode('d22Profit', this)">月獲利排行</button>
+                    <button class="hero-btn" onclick="setHeroMode('d5Pct', this)">5日(%)</button>
+                    <button class="hero-btn" onclick="setHeroMode('d22Pct', this)">22日(%)</button>
+                    <button class="hero-btn" onclick="setHeroMode('totalPct', this)">個人累計損益%</button>
                     <button class="hero-btn dark-btn active-hero" onclick="setHeroMode('default', this)">預設</button>
                 </div>
                 <div class="card">
                     <div class="card-header cursor-default pb-8">
                         <div class="card-title-group">
-                            <h2 class="card-title">即時獲利排行</h2>
+                            <h2 class="card-title">標的績效矩陣</h2>
                             <span class="card-subtitle" id="history-status">點擊載入歷史數據...</span>
                         </div>
                     </div>
@@ -212,101 +337,8 @@
                     </div>
                 </div>
             </div>
-            <div id="edit-content" class="hide">
-                <div class="cloud-status" id="cloud-status">
-                    <div class="dot"></div><span id="cloud-status-text">尚未連線</span>
-                </div>
-                <div class="card">
-                    <div class="card-header cursor-default pb-8">
-                        <h2 class="card-title">現金水位調整</h2>
-                    </div>
-                    <div class="edit-item mb-0 pb-0" style="border:none;">
-                        <div class="edit-symbol">TWD</div>
-                        <div class="edit-inputs">
-                            <div class="edit-input-wrapper">
-                                <span class="edit-label">總金額</span>
-                                <input type="number" id="edit-cash-input" class="edit-input" value="0">
-                            </div>
-                        </div>
-                        <button class="btn-cash-update" onclick="saveCash()">更新</button>
-                    </div>
-                </div>
-                <div class="changelog-panel" id="changelog-panel">
-                    <div class="changelog-header">
-                        <span class="changelog-title">變更紀錄</span>
-                        <span class="changelog-badge empty" id="changelog-badge">0</span>
-                    </div>
-                    <div id="changelog-body">
-                        <div class="changelog-empty">無變更</div>
-                    </div>
-                </div>
-                <button class="save-to-cloud-btn" id="saveCloudBtn" onclick="saveToCloud()">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> 儲存至邊緣金庫
-                </button>
-            </div>
 
-            <div id="transactions-content" class="hide">
-                <div class="card">
-                    <div class="card-header cursor-default pb-12">
-                        <div class="card-title-group">
-                            <h2 class="card-title">編輯持股部位</h2>
-                            <span class="card-subtitle">直接修改股數與成本，完成後儲存</span>
-                        </div>
-                    </div>
-
-                    <!-- Cash editing section -->
-                    <div class="edit-item" style="background: rgba(197, 160, 89, 0.05); border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
-                        <div class="edit-symbol" style="color: #C5A059;"><i class="fa-solid fa-sack-dollar"></i></div>
-                        <div class="edit-inputs">
-                            <div class="edit-input-wrapper">
-                                <span class="edit-label">現金部位 (TWD)</span>
-                                <input type="number" id="edit-page-cash-input" class="edit-input" value="0">
-                            </div>
-                        </div>
-                        <!-- Placeholder to align with remove buttons on stock items -->
-                        <div style="width: 50px;"></div>
-                    </div>
-
-                    <!-- Container for editable holdings -->
-                    <div id="edit-holdings-list">
-                        <div class="empty-state" style="padding: 20px 15px;">持股清單載入中...</div>
-                        <!-- 
-                        JS will render items here. Example:
-                        <div class="edit-item" data-symbol="2330.TW">
-                            <div class="edit-symbol">2330.TW</div>
-                            <div class="edit-inputs">
-                                <div class="edit-input-wrapper">
-                                    <span class="edit-label">持有股數</span>
-                                    <input type="number" class="edit-input shares-input" value="1000">
-                                </div>
-                                <div class="edit-input-wrapper">
-                                    <span class="edit-label">平均成本</span>
-                                    <input type="number" step="any" class="edit-input cost-input" value="650.5">
-                                </div>
-                            </div>
-                            <button class="btn-remove-stock" onclick="removeHolding(this)"><i class="fa-solid fa-trash-can"></i></button>
-                        </div>
-                        -->
-                    </div>
-
-                    <!-- Form to add a new holding -->
-                    <div class="edit-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 10px;">
-                        <div class="edit-symbol"><i class="fa-solid fa-plus"></i></div>
-                        <div class="edit-inputs">
-                            <div class="edit-input-wrapper">
-                                <span class="edit-label">新標的代號 (含市場)</span>
-                                <input type="text" id="new-holding-symbol" class="edit-input" placeholder="例如: 2330.TW 或 AAPL.US">
-                            </div>
-                        </div>
-                        <button class="btn-cash-update" onclick="addHolding()">加入</button>
-                    </div>
-                </div>
-
-                <button class="save-to-cloud-btn" id="save-holdings-btn" onclick="saveHoldings()">
-                    <i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更
-                </button>
-            </div>
-
+            <!-- 5. 資訊 (Info) -->
             <div id="info-content" class="hide">
                 <div class="market-header">
                     <div class="market-subtitle">MARKET DASHBOARD</div>
@@ -367,89 +399,71 @@
                         <div class="market-chg" id="info-futw-chg">--</div>
                         <div class="market-chg mt-10" id="info-futw-time"></div>
                     </div>
-
                     <div class="market-card">
                         <div class="card-label">外資買賣超 (億)</div>
                         <div class="market-val" id="info-foreign-val">--</div>
-                        <!-- 🌟 加上 id="info-foreign-date" -->
                         <div class="market-chg color-muted" id="info-foreign-date">資料載入中...</div>
                     </div>
-
                     <div class="market-card">
                         <div class="card-label">投信買賣超 (億)</div>
                         <div class="market-val" id="info-trust-val">--</div>
-                        <!-- 🌟 加上 id="info-trust-date" -->
                         <div class="market-chg color-muted" id="info-trust-date">資料載入中...</div>
                     </div>
-
                     <div class="market-card">
                         <div class="card-label">自營商買賣超 (億)</div>
                         <div class="market-val" id="info-dealer-val">--</div>
-                        <!-- 🌟 加上 id="info-dealer-date" -->
                         <div class="market-chg color-muted" id="info-dealer-date">資料載入中...</div>
                     </div>
                 </div>
             </div>
-            <div id="news-content" class="hide">
 
-                <div class="news-hero">
-                    <img src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=400&auto=format&fit=crop"
-                        alt="Breaking News" class="news-hero-img">
-                    <div class="news-hero-text">
-                        <h1 class="news-hero-title">新聞頁面:<br>這裡蒐集了您所關心的主題</h1>
-                        <p class="news-hero-subtitle">目前使用關鍵字：台股、美股、美元匯率、國際局勢</p>
-                        <div class="news-social-icons">
-                            <i class="fa-brands fa-facebook"></i>
-                            <i class="fa-brands fa-twitter"></i>
-                            <i class="fa-brands fa-instagram"></i>
-                            <i class="fa-brands fa-linkedin"></i>
+            <!-- 6. 編輯 (Transactions / Holdings) -->
+            <div id="transactions-content" class="hide">
+                <div class="card">
+                    <div class="card-header cursor-default pb-12">
+                        <div class="card-title-group">
+                            <h2 class="card-title">編輯持股與現金部位</h2>
+                            <span class="card-subtitle">修改股數與成本，完成後同步邊緣金庫</span>
                         </div>
+                    </div>
+
+                    <div class="edit-item" style="background: rgba(197, 160, 89, 0.05); border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
+                        <div class="edit-symbol" style="color: #C5A059;"><i class="fa-solid fa-sack-dollar"></i></div>
+                        <div class="edit-inputs">
+                            <div class="edit-input-wrapper">
+                                <span class="edit-label">現金資產 (TWD)</span>
+                                <input type="number" id="edit-page-cash-input" class="edit-input" value="0">
+                            </div>
+                        </div>
+                        <div style="width: 50px;"></div>
+                    </div>
+
+                    <div id="edit-holdings-list">
+                        <div class="empty-state" style="padding: 20px 15px;">持股清單載入中...</div>
+                    </div>
+
+                    <div class="edit-item" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 10px;">
+                        <div class="edit-symbol"><i class="fa-solid fa-plus"></i></div>
+                        <div class="edit-inputs">
+                            <div class="edit-input-wrapper">
+                                <span class="edit-label">新標的代號 (例如: 2330.TW 或 AAPL.US)</span>
+                                <input type="text" id="new-holding-symbol" class="edit-input" placeholder="例如: 2330.TW 或 AAPL.US">
+                            </div>
+                        </div>
+                        <button class="btn-cash-update" onclick="addHolding()">加入</button>
                     </div>
                 </div>
 
-                <div class="news-divider">
-                    <div class="news-divider-yellow"></div>
-                    <div class="news-divider-purple"></div>
-                </div>
-
-                <div class="news-list">
-
-                    <div class="news-card">
-                        <h2 class="news-card-title">台股</h2>
-                        <span class="news-card-tag">BUSINESS</span>
-                        <div class="news-card-content">content</div>
-                        <div class="news-card-footer">
-                            <span class="news-card-date">更新日期：XX年XX月XX日 12:25</span>
-                            <a href="#" class="news-card-link">繼續閱讀..</a>
-                        </div>
-                    </div>
-
-                    <div class="news-card">
-                        <h2 class="news-card-title">美股</h2>
-                        <span class="news-card-tag">BUSINESS</span>
-                        <div class="news-card-content">content</div>
-                        <div class="news-card-footer">
-                            <span class="news-card-date">更新日期：XX年XX月XX日 12:25</span>
-                            <a href="#" class="news-card-link">繼續閱讀..</a>
-                        </div>
-                    </div>
-
-                    <div class="news-card">
-                        <h2 class="news-card-title">美元匯率</h2>
-                        <span class="news-card-tag">BUSINESS</span>
-                        <div class="news-card-content">content</div>
-                        <div class="news-card-footer">
-                            <span class="news-card-date">更新日期：XX年XX月XX日 12:25</span>
-                            <a href="#" class="news-card-link">繼續閱讀..</a>
-                        </div>
-                    </div>
-
-                </div>
+                <button class="save-to-cloud-btn" id="save-holdings-btn" onclick="saveHoldings()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更至雲端
+                </button>
             </div>
         </main>
+
         <div class="footer" id="last-update">資料載入中...</div>
         <div id="toast" class="toast">更新成功</div>
     </div>
+
     <script src="js/chart.js"></script>
     <script src="js/main.js"></script>
 </body>
