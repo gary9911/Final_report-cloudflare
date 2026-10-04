@@ -4,6 +4,70 @@ const SECRET_KEY = 'MySuperSecretWealth2026';
 
 const $ = id => document.getElementById(id);
 
+// 🌟 四桶投資框架定義表 (對齊操作手冊)
+const FOUR_BUCKETS = {
+    core: {
+        id: 'core',
+        name: 'Core Beta',
+        subtitle: '長期複利區塊',
+        targetMin: 40,
+        targetMax: 45,
+        targetMid: 42,
+        color: '#2C3E50',
+        symbols: {
+            'VTI': { sub: '美股大盤', market: 'US' },
+            '006208': { sub: '台股大盤', market: 'TW' },
+            '00878': { sub: '台股緩衝 satellite', market: 'TW' },
+            '2886': { sub: '台股緩衝 satellite', market: 'TW' }
+        }
+    },
+    growth: {
+        id: 'growth',
+        name: 'Growth Beta',
+        subtitle: '追加長期獲利',
+        targetMin: 20,
+        targetMax: 25,
+        targetMid: 23,
+        hardMax: 30,
+        color: '#5B8DB8',
+        symbols: {
+            'QQQ': { sub: '美股科技巨頭', market: 'US' },
+            'SMH': { sub: '美股半導體', market: 'US' },
+            '00881': { sub: '台股科技板塊', market: 'TW' },
+            '2330': { sub: '半導體龍頭', market: 'TW' }
+        }
+    },
+    alpha: {
+        id: 'alpha',
+        name: 'Alpha',
+        subtitle: '主動超額報酬',
+        targetMin: 10,
+        targetMax: 15,
+        targetMid: 12,
+        hardMax: 15,
+        color: '#D96B6B',
+        symbols: {
+            'GOOG': { sub: '美國科技巨頭', market: 'US' },
+            '2881': { sub: '台灣金融股龍頭', market: 'TW' },
+            '00947': { sub: '台灣IC設計', market: 'TW' }
+        }
+    },
+    cash: {
+        id: 'cash',
+        name: '現金／債',
+        subtitle: '防守 + 等待機會',
+        targetMin: 20,
+        targetMax: 25,
+        targetMid: 23,
+        hardMin: 15,
+        color: '#C5A059',
+        symbols: {
+            'SGOV': { sub: '可動用現金', market: 'US' },
+            'LQD': { sub: '防禦型債券', market: 'US' }
+        }
+    }
+};
+
 const appData = {
     cash: 0,
     settings: { usdToTwd: 31.5 },
@@ -12,10 +76,9 @@ const appData = {
     history: [],
     netWorthHistory: [],
     transactions: [],
-    totals: { grandNet: 0, grandCost: 0, stockNet: 0, stockCost: 0, twNet: 0, usNet: 0 },
+    totals: { grandNet: 0, grandCost: 0, stockNet: 0, stockCost: 0, twNet: 0, usNet: 0, todayProfit: 0 },
     marketTime: { tw: null, us: null },
-    news: [],
-    benchmarkData: null,
+    benchmarkData: null
 };
 
 let twseDataMap = null;
@@ -25,25 +88,21 @@ let currentHeroMode = 'default';
 let currentTab = 'dashboard';
 let chartInst = { allocation: null, nw: null, stock: null, cash: null };
 const changelog = [];
-let draftTxs = [];
 
-const fmtM = n => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
-const fmtMax2 = n => n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-const fmtMax3 = n => n.toLocaleString('en-US', { maximumFractionDigits: 3 });
-const fmtP = n => (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+const fmtM = n => (n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const fmtMax2 = n => (n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const fmtMax3 = n => (n || 0).toLocaleString('en-US', { maximumFractionDigits: 3 });
+const fmtP = n => (n > 0 ? '+' : '') + (n || 0).toFixed(2) + '%';
 const clr = n => n > 0 ? 'color-up' : (n < 0 ? 'color-down' : '');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const showToast = msg => {
-    $('toast').innerText = msg;
-    $('toast').classList.add('show');
-    setTimeout(() => $('toast').classList.remove('show'), 2500);
-};
-
-const setCloudStatus = (state, msg) => {
-    $('cloud-status').className = 'cloud-status ' + state;
-    $('cloud-status-text').innerText = msg;
+    const t = $('toast');
+    if (!t) return;
+    t.innerText = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
 };
 
 const fmtTime = ms => {
@@ -52,20 +111,46 @@ const fmtTime = ms => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+// 🌟 甜甜圈圖直接繪製整數百分比 Plugin
+const doughnutPercentagePlugin = {
+    id: 'doughnutPercentagePlugin',
+    afterDraw(chart) {
+        if (chart.config.type !== 'doughnut') return;
+        const { ctx } = chart;
+        const dataset = chart.data.datasets[0];
+        const total = dataset.data.reduce((a, b) => a + b, 0);
+        if (!total) return;
+
+        chart.getDatasetMeta(0).data.forEach((element, i) => {
+            const val = dataset.data[i];
+            const pct = Math.round((val / total) * 100);
+            if (pct < 4) return;
+            const { x, y } = element.tooltipPosition();
+            ctx.save();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(`${pct}%`, x, y);
+            ctx.restore();
+        });
+    }
+};
+
 async function loadFromCloudflareKV() {
-    setCloudStatus('syncing', '讀取邊緣金庫中...');
     try {
         const res = await fetch(DB_URL, { headers: { 'X-Master-Key': SECRET_KEY } });
         const data = await res.json();
 
         if (Object.keys(data).length === 0) {
-            setCloudStatus('synced', '全新金庫，請新增持股');
             return true;
         }
 
         appData.twStocks = [];
         appData.usStocks = [];
-        appData.cash = data.cash || 0;
+        appData.cash = Number(data.cash) || 0;
         appData.netWorthHistory = data.netWorthHistory || [];
         appData.transactions = data.transactions || [];
 
@@ -85,19 +170,14 @@ async function loadFromCloudflareKV() {
         }
 
         isDataInitialized = true;
-        setCloudStatus('synced', `已載入資料`);
         return true;
     } catch (e) {
-        setCloudStatus('error', '雲端尚無資料或連線失敗');
+        console.error("讀取雲端失敗:", e);
         return false;
     }
 }
 
 async function saveToCloud() {
-    $('saveCloudBtn').disabled = true;
-    $('saveCloudBtn').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 極速寫入中...';
-    setCloudStatus('syncing', '寫入邊緣金庫中...');
-
     const payload = {
         cash: appData.cash,
         netWorthHistory: appData.netWorthHistory,
@@ -116,150 +196,14 @@ async function saveToCloud() {
         });
         const result = await res.json();
         if (result.success) {
-            setCloudStatus('synced', '✅ 極速儲存成功');
-            showToast('⚡ 邊緣節點已同步！');
+            showToast('⚡ 邊緣金庫同步成功');
             changelog.length = 0;
-            renderChangelog();
-        } else {
-            throw new Error(result.error);
+            return true;
         }
+        throw new Error(result.error || '寫入失敗');
     } catch (e) {
-        setCloudStatus('error', '❌ 寫入失敗');
-        showToast('❌ 寫入失敗');
-    } finally {
-        $('saveCloudBtn').disabled = false;
-        $('saveCloudBtn').innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存至邊緣金庫';
-    }
-}
-
-// 🌟 資訊頁面渲染核心 (含富台指現貨修正與盤中時間)
-async function renderInfoView() {
-    const symbols = {
-        'twii': '^TWII',
-        'gspc': '^GSPC',
-        'txf': 'EWT',
-        'twdx': 'TWD=X',
-        'vix': '^VIX',
-        'oil': 'BZ=F',
-        'tsm': 'TSM',
-        'tnx': '^TNX',
-        'futw': 'FTCRTWNT.FGI'   // ✅ 改抓富台指底層現貨，解決 API 空白問題
-    };
-
-    const priceMap = await fetchHybridYahooQuotes(Object.values(symbols));
-
-    for (const [id, sym] of Object.entries(symbols)) {
-        const data = priceMap[sym];
-        if (data) {
-            const chg = data.price - data.prevClose;
-            const pct = (chg / data.prevClose) * 100;
-
-            const valEl = id === 'futw' ? $('info-futw-val') : $(`mkt-${id}`);
-            const chgEl = id === 'futw' ? $('info-futw-chg') : $(`mkt-${id}-chg`);
-            const timeEl = id === 'futw' ? $('info-futw-time') : $(`mkt-${id}-time`); // ✅ 支援富台指時間綁定
-
-            if (valEl) valEl.innerText = data.price.toLocaleString(undefined, { minimumFractionDigits: 2 });
-            if (chgEl) {
-                chgEl.innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)} (${fmtP(pct)})`;
-                chgEl.className = `market-chg num ${clr(chg)}`;
-            }
-
-            if (timeEl) {
-                const d = new Date(data.time);
-                const timeStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-
-                let stateStr = '收盤';
-                let stateColor = '#8A94A6';
-                let stateIcon = '🌑';
-
-                const now = new Date().getTime();
-                const diffMins = Math.abs(now - data.time) / (1000 * 60);
-                const is24hMarket = ['TWD=X', 'BZ=F', '^VIX'].includes(sym);
-                const isLive = (data.state === 'REGULAR') || (is24hMarket && diffMins < 45) || (!data.state && diffMins < 30);
-
-                if (isLive) {
-                    stateStr = '盤中';
-                    stateColor = '#549B7B';
-                    stateIcon = '🟢';
-                } else if (data.state === 'PRE' || data.state === 'PREPRE') {
-                    stateStr = '盤前';
-                    stateColor = '#C5A059';
-                    stateIcon = '🟡';
-                } else if (data.state === 'POST') {
-                    stateStr = '盤後';
-                    stateColor = '#3A4A63';
-                    stateIcon = '🔵';
-                }
-
-                timeEl.innerHTML = `<span style="color: ${stateColor}; font-size: 12px; font-weight: 500;">${stateIcon} ${stateStr} ${timeStr}</span>`;
-            }
-        }
-    }
-
-    await fetchInstitutionalData();
-}
-
-// 🌟 三大法人動態抓取核心 (含精確日期解析)
-async function fetchInstitutionalData() {
-    try {
-        const apiUrl = `https://www.twse.com.tw/fund/BFI82U?response=json&type=day&_=${Date.now()}`;
-        const proxyUrl = `${WORKER_URL}${encodeURIComponent(apiUrl)}`;
-
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error('無法取得證交所資料');
-
-        const json = await res.json();
-        if (json.stat !== 'OK' || !json.data) throw new Error('三大法人資料格式異常');
-
-        // ✅ 解析官方傳回的結算日期
-        let reportDate = "最新交易日";
-        if (json.date && json.date.length === 8) {
-            reportDate = `${json.date.substring(0, 4)}/${json.date.substring(4, 6)}/${json.date.substring(6, 8)}`;
-        }
-
-        const parseToYi = (str) => {
-            const num = parseInt(str.replace(/,/g, ''), 10);
-            return num / 100000000;
-        };
-
-        let dealer = 0, trust = 0, foreign = 0;
-
-        json.data.forEach(row => {
-            const name = row[0];
-            const netVal = parseToYi(row[3]);
-
-            if (name.includes('自營商(自行買賣)') || name.includes('自營商(避險)')) {
-                dealer += netVal;
-            } else if (name.includes('投信')) {
-                trust = netVal;
-            } else if (name.includes('外資及陸資') || name.includes('外資自營商')) {
-                foreign += netVal;
-            }
-        });
-
-        const updateChipCard = (elementId, dateId, value) => {
-            const el = $(elementId);
-            const dateEl = $(dateId);
-            if (!el) return;
-
-            const displayStr = value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1);
-            el.textContent = displayStr;
-            el.className = 'market-val num ' + (value > 0 ? 'color-up' : (value < 0 ? 'color-down' : ''));
-
-            if (dateEl) {
-                dateEl.textContent = reportDate;
-            }
-        };
-
-        updateChipCard('info-foreign-val', 'info-foreign-date', foreign);
-        updateChipCard('info-trust-val', 'info-trust-date', trust);
-        updateChipCard('info-dealer-val', 'info-dealer-date', dealer);
-
-    } catch (error) {
-        console.error('抓取籌碼資料失敗:', error);
-        ['info-foreign-val', 'info-trust-val', 'info-dealer-val'].forEach(id => {
-            if ($(id)) $(id).textContent = '暫無資料';
-        });
+        showToast('❌ 儲存失敗');
+        throw e;
     }
 }
 
@@ -313,7 +257,6 @@ async function fetchHybridYahooQuotes(symbolsArray) {
 async function fetchPricesAndRender(forceRefresh = false) {
     const fetchTWSE = async () => {
         if (twseDataMap && !forceRefresh) return;
-
         try {
             const symbols = appData.twStocks.map(s => `tse_${s.symbol}.tw`).join('|');
             if (!symbols) return;
@@ -325,9 +268,7 @@ async function fetchPricesAndRender(forceRefresh = false) {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
             const data = await res.json();
-
             twseDataMap = {};
-
             if (data.msgArray) {
                 data.msgArray.forEach(item => {
                     if (item.code && (item.z || item.y)) {
@@ -346,7 +287,8 @@ async function fetchPricesAndRender(forceRefresh = false) {
     const [_, yfData] = await Promise.all([fetchTWSE(), fetchHybridYahooQuotes(yfReq)]);
 
     if (yfData['TWD=X']?.price) appData.settings.usdToTwd = yfData['TWD=X'].price;
-    $('exchange-rate-display').innerText = `匯率 USD/TWD = ${appData.settings.usdToTwd.toFixed(2)}`;
+    const exRateDisplay = $('exchange-rate-display');
+    if (exRateDisplay) exRateDisplay.innerText = `匯率 USD/TWD = ${appData.settings.usdToTwd.toFixed(2)}`;
 
     const bindPrice = (stock, isUS) => {
         const sym = isUS ? stock.symbol : `${stock.symbol}.TW`;
@@ -355,9 +297,7 @@ async function fetchPricesAndRender(forceRefresh = false) {
         if (!isUS && twseDataMap?.[stock.symbol]) {
             stock.currentPrice = twseDataMap[stock.symbol];
             stock.isError = false;
-            if (q?.prevClose) {
-                stock.prevClose = q.prevClose;
-            }
+            if (q?.prevClose) stock.prevClose = q.prevClose;
         } else if (q?.price) {
             stock.currentPrice = q.price;
             stock.prevClose = q.prevClose || stock.prevClose;
@@ -375,7 +315,7 @@ async function fetchPricesAndRender(forceRefresh = false) {
     appData.usStocks.forEach(s => bindPrice(s, true));
 
     renderApp();
-    if (currentTab === 'edit') renderEditView();
+    if (currentTab === 'allocation') renderAllocationView();
     if (currentTab === 'tracking') renderTrackingChart();
     if (currentTab === 'transactions') renderEditHoldingsView();
 }
@@ -409,7 +349,7 @@ const renderStockList = (stocks, isUS) => stocks.map(s => {
 
     appData.totals[isUS ? 'usNet' : 'twNet'] += (net * exRate);
 
-    const priceStr = s.isError ? '⚠️阻擋' : (isUS ? '$' : '') + s.currentPrice.toFixed(2);
+    const priceStr = s.isError ? '⚠️阻擋' : (isUS ? '$' : '') + (s.currentPrice || 0).toFixed(2);
     const netStr = s.isError ? '--' : 'NT$ ' + fmtM(net * exRate);
     const profitPct = cost === 0 ? 0 : (profit / cost) * 100;
     const profitStr = s.isError ? '--' : 'NT$ ' + fmtM(profit * exRate) + ' (' + fmtP(profitPct).replace(/[()%]+/g, '') + '%)';
@@ -434,34 +374,6 @@ const renderStockList = (stocks, isUS) => stocks.map(s => {
     `;
 }).join('');
 
-function generateAllocationBarHtml(stocks, isUS) {
-    if (!stocks || stocks.length === 0) return '';
-    const ex = isUS ? appData.settings.usdToTwd : 1;
-    let totalNet = 0;
-
-    const stockData = stocks.map(s => {
-        const net = (s.isError ? 0 : s.currentPrice) * s.shares * ex;
-        totalNet += net;
-        return { symbol: s.symbol, net: net };
-    });
-
-    if (totalNet === 0) return '';
-    stockData.sort((a, b) => b.net - a.net);
-
-    const colors = ['#C5A059', '#3A4A63', '#549B7B', '#D96B6B', '#8A94A6', '#D4AF37', '#2C3A50', '#76A5AF', '#E06666', '#B4A7D6'];
-    let barHtml = '<div class="mini-allocation-bar">';
-
-    stockData.forEach((s, i) => {
-        const pct = (s.net / totalNet) * 100;
-        if (pct > 0) {
-            const color = colors[i % colors.length];
-            barHtml += `<div class="mini-bar-segment" style="width: ${pct}%; background-color: ${color};" title="${s.symbol} ${pct.toFixed(1)}%">${s.symbol}</div>`;
-        }
-    });
-
-    return barHtml + '</div>';
-}
-
 function renderApp() {
     appData.totals.twNet = 0;
     appData.totals.usNet = 0;
@@ -469,8 +381,8 @@ function renderApp() {
     const twCost = appData.twStocks.reduce((sum, s) => sum + s.costPrice * s.shares, 0);
     const usCost = appData.usStocks.reduce((sum, s) => sum + s.costPrice * s.shares * appData.settings.usdToTwd, 0);
 
-    $('tw-list').innerHTML = generateAllocationBarHtml(appData.twStocks, false) + (renderStockList(appData.twStocks, false) || '<div class="list-item">無部位</div>');
-    $('us-list').innerHTML = generateAllocationBarHtml(appData.usStocks, true) + (renderStockList(appData.usStocks, true) || '<div class="list-item">無部位</div>');
+    $('tw-list').innerHTML = renderStockList(appData.twStocks, false) || '<div class="list-item">無部位</div>';
+    $('us-list').innerHTML = renderStockList(appData.usStocks, true) || '<div class="list-item">無部位</div>';
 
     const tNet = appData.totals.twNet;
     const uNet = appData.totals.usNet;
@@ -491,10 +403,8 @@ function renderApp() {
     appData.totals.todayProfit = fastTodayProfit;
 
     updateHeroBanner(currentTab);
-    if (currentTab === 'dashboard') {
-        renderAllocationChart();
-        renderDistributionCharts();
-    }
+    if (currentTab === 'dashboard') renderAllocationChart();
+    if (currentTab === 'allocation') renderAllocationView();
 
     animateVal("tw-net", tNet);
     animateVal("us-net", uNet);
@@ -513,11 +423,14 @@ function renderApp() {
 }
 
 function updateHeroBanner(v) {
-    const isSt = (v === 'history' || v === 'edit' || v === 'transactions');
+    const isSt = (v === 'history' || v === 'transactions');
     const isTracking = (v === 'tracking');
     const isHistory = (v === 'history');
+    const isAlloc = (v === 'allocation');
 
-    $('hero-main-title').innerText = isSt ? '股票資產總淨值' : '總資產淨值';
+    if ($('hero-main-title')) {
+        $('hero-main-title').innerText = isSt ? '股票資產總淨值' : (isAlloc ? '資產總覽與配比' : '總資產淨值');
+    }
 
     const mainAmount = isSt ? appData.totals.stockNet : appData.totals.grandNet;
     animateVal("grand-total", mainAmount);
@@ -525,25 +438,20 @@ function updateHeroBanner(v) {
     const subInfo = document.querySelector('.hero-sub-info');
     if (!subInfo) return;
 
-    if (isTracking) {
+    if (isTracking || isAlloc) {
         subInfo.innerHTML = `
-            <div><span style="color: #C5A059; font-weight: 600;">台股資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.twNet)}</strong></div>
-            <div><span style="color: #D96B6B; font-weight: 600;">美股資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.usNet)}</strong></div>
-            <div><span style="color: #7aa0dd; font-weight: 600;">現金部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.cash)}</strong></div>
+            <div><span style="color: #2C3E50; font-weight: 600;">台股部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.twNet)}</strong></div>
+            <div><span style="color: #5B8DB8; font-weight: 600;">美股部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.usNet)}</strong></div>
+            <div><span style="color: #C5A059; font-weight: 600;">現金資產</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.cash)}</strong></div>
         `;
     } else if (isHistory) {
         let twToday = 0;
         let usToday = 0;
-
         appData.twStocks.forEach(s => {
-            if (!s.isError && s.prevClose && s.currentPrice) {
-                twToday += (s.currentPrice - s.prevClose) * s.shares;
-            }
+            if (!s.isError && s.prevClose && s.currentPrice) twToday += (s.currentPrice - s.prevClose) * s.shares;
         });
         appData.usStocks.forEach(s => {
-            if (!s.isError && s.prevClose && s.currentPrice) {
-                usToday += (s.currentPrice - s.prevClose) * s.shares * appData.settings.usdToTwd;
-            }
+            if (!s.isError && s.prevClose && s.currentPrice) usToday += (s.currentPrice - s.prevClose) * s.shares * appData.settings.usdToTwd;
         });
 
         subInfo.innerHTML = `
@@ -569,7 +477,7 @@ function navTo(target, el) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
 
-    ['dashboard', 'tracking', 'history', 'transactions', 'info', 'news'].forEach(t => {
+    ['dashboard', 'allocation', 'tracking', 'history', 'info', 'transactions'].forEach(t => {
         const contentDiv = $(t + '-content');
         if (contentDiv) {
             contentDiv.classList[target === t ? 'remove' : 'add']('hide');
@@ -578,7 +486,7 @@ function navTo(target, el) {
 
     const heroSection = document.querySelector('.hero-section');
     if (heroSection) {
-        if (target === 'info' || target === 'news') {
+        if (target === 'info') {
             heroSection.classList.add('hide');
         } else {
             heroSection.classList.remove('hide');
@@ -587,18 +495,16 @@ function navTo(target, el) {
     }
 
     if (target === 'dashboard') renderAllocationChart();
+    else if (target === 'allocation') renderAllocationView();
     else if (target === 'history' && !isHistoryLoaded && (appData.twStocks.length > 0 || appData.usStocks.length > 0)) loadHistoryData();
     else if (target === 'tracking') renderTrackingChart();
     else if (target === 'transactions') renderEditHoldingsView();
     else if (target === 'info') renderInfoView();
-    else if (target === 'news') {
-        if (appData.news.length === 0) fetchNewsData();
-        else renderNewsView();
-    }
 }
 
 function toggleCard(id) {
-    $(id).classList.toggle('expanded');
+    const el = $(id);
+    if (el) el.classList.toggle('expanded');
 }
 
 function animateVal(id, end) {
@@ -616,35 +522,90 @@ function animateVal(id, end) {
     requestAnimationFrame(step);
 }
 
-// 🌟 移除原本的右上角定位器，改用「純 HTML 外部提示框」魔法
-const getChartOpt = () => ({
+// 🌟 1. 【首頁】圓餅圖：標籤改為「現金資產」＋ 圖表直接標註整數百分比
+function renderAllocationChart() {
+    const d = [appData.totals.twNet, appData.totals.usNet, appData.cash];
+
+    if (chartInst.allocation) {
+        chartInst.allocation.data.datasets[0].data = d;
+        chartInst.allocation.update();
+    } else {
+        const ctx = $('allocationChart');
+        if (!ctx) return;
+
+        chartInst.allocation = new Chart(ctx, {
+            type: 'doughnut',
+            plugins: [doughnutPercentagePlugin],
+            data: {
+                labels: ['台股資產', '美股資產', '現金資產'],
+                datasets: [{
+                    data: d,
+                    backgroundColor: ['#C5A059', '#D96B6B', '#3A4A63'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '72%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 16,
+                            font: { family: 'Inter', size: 12 },
+                            generateLabels: function(chart) {
+                                const data = chart.data;
+                                const tot = data.datasets[0].data.reduce((acc, v) => acc + v, 0);
+                                return data.labels.map((label, i) => {
+                                    const val = data.datasets[0].data[i] || 0;
+                                    const pct = tot > 0 ? Math.round((val / tot) * 100) : 0;
+                                    return {
+                                        text: `${label} ${pct}%`,
+                                        fillStyle: data.datasets[0].backgroundColor[i],
+                                        strokeStyle: data.datasets[0].backgroundColor[i],
+                                        pointStyle: 'circle',
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: c => {
+                                const tot = c.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = tot > 0 ? Math.round((c.raw / tot) * 100) : 0;
+                                return ` ${c.label}: NT$ ${fmtM(c.raw)} (${pct}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// 🌟 2. 【追蹤】折線圖通用設定：動態偵測跨月邊界，修復 8 月及 10 月縱向格線
+const getChartOpt = (monthBoundaryIndices = new Set()) => ({
     responsive: true,
     maintainAspectRatio: false,
     layout: { padding: { bottom: 10 } },
-
-    // 依然保持游標靠近就吸附的磁吸效果
-    interaction: {
-        mode: 'index',
-        intersect: false
-    },
-
+    interaction: { mode: 'index', intersect: false },
     plugins: {
         legend: { display: false },
         tooltip: {
-            enabled: false, // 🌟 關鍵 1：關閉原本內建在畫布裡面的提示框
-            position: 'nearest',
+            enabled: false,
             external: function (context) {
-                // 👇 新增這段判斷：如果是手機螢幕（寬度小於等於 768px），則直接隱藏並跳出
                 if (window.innerWidth <= 768) {
-                    let tooltipEl = document.getElementById('custom-chart-tooltip');
+                    let tooltipEl = $('custom-chart-tooltip');
                     if (tooltipEl) tooltipEl.style.opacity = 0;
                     return;
                 }
 
-                // 🌟 關鍵 2：動態生成一個不受畫布限制的 HTML 提示區塊
-                let tooltipEl = document.getElementById('custom-chart-tooltip');
-
-                // 如果還沒有這個區塊，就在網頁 body 產生一個
+                let tooltipEl = $('custom-chart-tooltip');
                 if (!tooltipEl) {
                     tooltipEl = document.createElement('div');
                     tooltipEl.id = 'custom-chart-tooltip';
@@ -654,8 +615,8 @@ const getChartOpt = () => ({
                     tooltipEl.style.opacity = 0;
                     tooltipEl.style.pointerEvents = 'none';
                     tooltipEl.style.position = 'absolute';
-                    tooltipEl.style.transform = 'translate(-100%, 0)'; // 強制往左邊生長，絕對不會蓋到右邊的按鈕
-                    tooltipEl.style.transition = 'all .15s ease'; // 加上滑順的跟隨動畫
+                    tooltipEl.style.transform = 'translate(-100%, 0)';
+                    tooltipEl.style.transition = 'all .15s ease';
                     tooltipEl.style.zIndex = 9999;
                     tooltipEl.style.padding = '12px';
                     tooltipEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
@@ -664,21 +625,14 @@ const getChartOpt = () => ({
                 }
 
                 const tooltipModel = context.tooltip;
-
-                // 如果滑鼠離開了圖表，就把這個 HTML 區塊隱藏
                 if (tooltipModel.opacity === 0) {
                     tooltipEl.style.opacity = 0;
                     return;
                 }
 
-                // 組合裡面的日期、顏色標籤、線條名稱與金額數字
                 if (tooltipModel.body) {
                     const titleLines = tooltipModel.title || [];
-
-                    // 標題區塊：加上底線分隔，視覺更俐落
                     let innerHtml = `<div style="font-weight:bold; margin-bottom:12px; font-size:14px; color:#8A94A6; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">${titleLines[0]}</div>`;
-
-                    // 🌟 啟動 CSS Grid 網格：設定為 3 欄並排，並拉開直向與橫向的間距
                     innerHtml += `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 24px;">`;
 
                     tooltipModel.dataPoints.forEach(function (dp, i) {
@@ -687,7 +641,6 @@ const getChartOpt = () => ({
                         const val = Math.round(dp.parsed.y).toLocaleString();
                         const label = dp.dataset.label;
 
-                        // 🌟 內部排版優化：將「標籤」與「金額」改為上下兩行，適合多欄位並排閱讀
                         innerHtml += `
                             <div style="display:flex; flex-direction:column; min-width: 120px;">
                                 <div style="display:flex; align-items:center; font-size:12px; color:#E2E8F0; margin-bottom:4px;">
@@ -699,15 +652,12 @@ const getChartOpt = () => ({
                         `;
                     });
 
-                    innerHtml += `</div>`; // 關閉 Grid 容器
+                    innerHtml += `</div>`;
                     tooltipEl.innerHTML = innerHtml;
                 }
 
-                // 🌟 關鍵 3：將提示框固定在圖表中央
                 const chart = context.chart;
-
                 tooltipEl.style.opacity = 1;
-
                 const position = chart.canvas.getBoundingClientRect();
                 const chartCenterX = position.left + window.scrollX + position.width / 2;
                 const chartCenterY = position.top + window.scrollY + position.height / 2;
@@ -718,171 +668,64 @@ const getChartOpt = () => ({
             }
         }
     },
-
     scales: {
         y: {
             ticks: { font: { size: 10, family: 'Inter' }, callback: v => (v / 10000).toFixed(0) + '萬' },
             grid: { color: 'rgba(26,36,54,0.05)' }
         },
         x: {
-            ticks: { font: { size: 10, family: 'Inter' }, autoSkip: false, maxRotation: 45, minRotation: 45 },
-            grid: { display: false }
+            ticks: {
+                font: { size: 10, family: 'Inter' },
+                autoSkip: false,
+                maxRotation: 0,
+                minRotation: 0,
+                callback: function (value, index) {
+                    if (monthBoundaryIndices.has(index)) {
+                        return this.getLabelForValue(value);
+                    }
+                    return null;
+                }
+            },
+            grid: {
+                display: true,
+                drawTicks: true,
+                tickLength: 6,
+                tickWidth: 2,
+                drawOnChartArea: true,
+                color: function (context) {
+                    if (monthBoundaryIndices.has(context.index)) {
+                        return 'rgba(150, 150, 150, 0.25)';
+                    }
+                    return 'rgba(0, 0, 0, 0)';
+                }
+            }
         }
     }
 });
-
-function renderDistributionCharts() {
-    // --- 共用：取得單一股票的目前淨值 ---
-    const getTwNetValue = (symbol) => {
-        const stock = appData.twStocks.find(s => s.symbol === symbol);
-        if (stock && !stock.isError && stock.currentPrice) {
-            return stock.currentPrice * stock.shares;
-        }
-        return 0;
-    };
-    const getUsNetValue = (symbol) => {
-        const stock = appData.usStocks.find(s => s.symbol === symbol);
-        if (stock && !stock.isError && stock.currentPrice) {
-            return stock.currentPrice * stock.shares * appData.settings.usdToTwd;
-        }
-        return 0;
-    };
-
-    // --- 共用：把 {label,value,color,pinned?}[] 畫成堆疊長條圖 + 圖例，並塞進指定容器 ---
-    // pinned: true 的項目固定排在最後（不參與金額排序），目前用於現金資產
-    // fixedOrder: true 時，整組資料完全依原始陣列順序顯示，不做任何金額排序
-    const renderStackedBar = (container, data, emptyText, fixedOrder = false) => {
-        const total = data.reduce((sum, item) => sum + item.value, 0);
-
-        if (total <= 0) {
-            container.innerHTML = `<div class="empty-state" style="padding: 10px 0;">${emptyText}</div>`;
-            return;
-        }
-
-        let sorted;
-        if (fixedOrder) {
-            sorted = data;
-        } else {
-            const normal = data.filter(item => !item.pinned).sort((a, b) => b.value - a.value);
-            const pinned = data.filter(item => item.pinned);
-            sorted = [...normal, ...pinned];
-        }
-
-        const segmentsHtml = sorted.map(item => {
-            const percentage = (item.value / total) * 100;
-            return `<div class="stacked-bar-segment" style="width: ${percentage.toFixed(2)}%; background-color: ${item.color};" title="${item.label}: ${percentage.toFixed(1)}%"></div>`;
-        }).join('');
-
-        const legendHtml = sorted.map(item => {
-            const percentage = (item.value / total) * 100;
-            return `
-                <div class="stacked-bar-legend-item">
-                    <span class="legend-color-box" style="background-color: ${item.color};"></span>
-                    <span class="legend-label">${item.label}</span>
-                    <span class="legend-value">${percentage.toFixed(1)}%</span>
-                </div>
-            `;
-        }).join('');
-
-        container.innerHTML = `
-            <div class="stacked-bar-wrapper">
-                ${segmentsHtml}
-            </div>
-            <div class="stacked-bar-legend">
-                ${legendHtml}
-            </div>
-        `;
-    };
-
-    // --- 1. 台股組合持股分佈 ---
-    const twDistContainer = $('tw-dist-bars');
-    if (twDistContainer) {
-        const tsmcValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.58) + (getTwNetValue('00881') * 0.4);
-        const otherTechValue = (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.31) + (getTwNetValue('00878') * 0.59);
-        const nonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.11) + (getTwNetValue('00878') * 0.41);
-
-        // 固定順序：TSMC概念 → 其他科技電子 → 傳產金融（不依金額排序）
-        const twData = [
-            { label: 'TSMC 持股', value: tsmcValue, color: 'rgba(44, 58, 80, 0.7)' },
-            { label: '其他科技電子', value: otherTechValue, color: '#5B8DB8' },
-            { label: '傳產金融', value: nonTechValue, color: '#549B7B' }
-        ];
-
-        renderStackedBar(twDistContainer, twData, '無台股資料可供分析', true);
-    }
-    // --- 2. 美股組合持股分佈 ---
-    const usDistContainer = $('us-dist-bars');
-    if (usDistContainer) {
-        const techSymbols = ['AAPL', 'GOOG', 'QQQ', 'SMH'];
-        const usTechValue = techSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.65);
-
-        const nonTechSymbols = ['SGOV', 'LQD'];
-        const usNonTechValue = nonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.35);
-
-        const usData = [
-            { label: '科技電子類股', value: usTechValue, color: '#5B8DB8' },
-            { label: '非科技類股', value: usNonTechValue, color: '#549B7B' }
-        ];
-
-        renderStackedBar(usDistContainer, usData, '無美股資料可供分析');
-    }
-
-    // --- 3. 總資產大類配比 ---
-    const totalDistContainer = $('total-dist-bars');
-    if (totalDistContainer) {
-        const twTechValue = getTwNetValue('2330') + (getTwNetValue('006208') * 0.58) + (getTwNetValue('00881') * 0.4)
-            + (getTwNetValue('00881') * 0.6) + (getTwNetValue('006208') * 0.31) + (getTwNetValue('00878') * 0.59);
-        const twNonTechValue = getTwNetValue('2886') + getTwNetValue('2881') + (getTwNetValue('006208') * 0.11) + (getTwNetValue('00878') * 0.41);
-
-        const usTechSymbols = ['AAPL', 'GOOG', 'QQQ', 'SMH'];
-        const usTechValue = usTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.65);
-        const usNonTechSymbols = ['SGOV', 'LQD'];
-        const usNonTechValue = usNonTechSymbols.reduce((sum, sym) => sum + getUsNetValue(sym), 0)
-            + (getUsNetValue('VTI') * 0.35);
-
-        const cashValue = (appData.cash && !isNaN(appData.cash)) ? appData.cash : 0;
-
-        const totalData = [
-            { label: '台美科技電子股', value: twTechValue + usTechValue, color: '#5B8DB8' },
-            { label: '台美非科技電子股', value: twNonTechValue + usNonTechValue, color: '#549B7B' },
-            { label: '現金資產', value: cashValue, color: '#C5A059', pinned: true }
-        ];
-
-        renderStackedBar(totalDistContainer, totalData, '無資料可供分析');
-    }
-}
 
 function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
     if (chartInstance) chartInstance.destroy();
     const ctx = $(ctxId);
     if (!ctx) return null;
 
-    const options = getChartOpt();
+    // 動態偵測跨月邊界點 (只要跨月就判定邊界，8月、10月不再遺漏)
+    const monthBoundaryIndices = new Set();
+    let prevMonthStr = '';
 
-    options.scales = options.scales || {};
-    options.scales.x = options.scales.x || { ticks: {}, grid: {} };
+    labels.forEach((lbl, idx) => {
+        const parts = lbl.split(/[-/]/);
+        if (parts.length >= 2) {
+            const mStr = parts[0] + '-' + parts[1];
+            if (mStr !== prevMonthStr) {
+                monthBoundaryIndices.add(idx);
+                prevMonthStr = mStr;
+            }
+        } else if (idx === 0) {
+            monthBoundaryIndices.add(idx);
+        }
+    });
 
-    options.scales.x.ticks.callback = function (value, index, values) {
-        let labelStr = this.getLabelForValue(value);
-        if (labelStr && labelStr.match(/(?:-|\/)0?1$/)) return labelStr;
-        return null;
-    };
-    options.scales.x.ticks.autoSkip = false;
-    options.scales.x.ticks.maxRotation = 0;
-    options.scales.x.ticks.minRotation = 0;
-
-    options.scales.x.grid.display = true;
-    options.scales.x.grid.drawTicks = true;
-    options.scales.x.grid.tickLength = 6;
-    options.scales.x.grid.tickWidth = 2;
-    options.scales.x.grid.drawOnChartArea = true;
-    options.scales.x.grid.color = function (context) {
-        if (context.tick && context.tick.label) return 'rgba(150, 150, 150, 0.2)';
-        return 'rgba(0, 0, 0, 0)';
-    };
+    const options = getChartOpt(monthBoundaryIndices);
 
     if (datasetsConfig.length > 1) {
         options.plugins.legend = {
@@ -890,8 +733,8 @@ function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
             position: 'top',
             align: 'end',
             labels: {
-                boxWidth: 5,
-                boxHeight: 5,
+                boxWidth: 6,
+                boxHeight: 6,
                 usePointStyle: true,
                 font: { size: 10, family: 'Inter' },
                 color: '#8A94A6'
@@ -906,20 +749,14 @@ function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
         data: ds.data,
         borderColor: ds.color,
         backgroundColor: ds.bg,
-        borderWidth: ds.isBenchmark ? 1 : 2,
+        borderWidth: ds.isBenchmark ? 1.5 : 2,
         pointBackgroundColor: '#cddef404',
         pointBorderColor: ds.color,
-        pointRadius: ds.isBenchmark ? 0 : 0,
+        pointRadius: 0,
         fill: ds.bg !== 'transparent',
         tension: 0,
         yAxisID: ds.yAxisID || 'y'
     }));
-
-    datasetsConfig.forEach(ds => {
-        if (ds.yAxisID && ds.yAxisID !== 'y') {
-            options.scales[ds.yAxisID] = { type: 'linear', display: false };
-        }
-    });
 
     return new Chart(ctx, {
         type: 'line',
@@ -928,34 +765,7 @@ function drawLineChart(chartInstance, ctxId, labels, datasetsConfig) {
     });
 }
 
-function renderAllocationChart() {
-    const d = [appData.totals.twNet, appData.totals.usNet, appData.cash];
-    if (chartInst.allocation) {
-        chartInst.allocation.data.datasets[0].data = d;
-        chartInst.allocation.update();
-    } else {
-        const ctx = $('allocationChart');
-        if (!ctx) return;
-
-        chartInst.allocation = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['台股資產', '美股資產', '現金'],
-                datasets: [{ data: d, backgroundColor: ['#C5A059', '#D96B6B', '#3A4A63'], borderWidth: 0 }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '75%',
-                plugins: {
-                    legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { family: 'Inter', size: 12 } } },
-                    tooltip: { callbacks: { label: c => ` NT$ ${c.raw.toLocaleString()} (${Math.round((c.raw / c.dataset.data.reduce((a, b) => a + b, 0)) * 100)}%)` } }
-                }
-            }
-        });
-    }
-}
-
+// 🌟 3. 【追蹤】歷史走勢圖：動態起點歸一化，解決 006208 與 SPY 失真
 async function renderTrackingChart() {
     animateVal("tracking-stock-total", appData.totals.stockNet);
     animateVal("tracking-cash-total", appData.cash);
@@ -998,18 +808,22 @@ async function renderTrackingChart() {
     chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwDatasets);
     chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockDatasets);
     chartInst.cash = drawLineChart(chartInst.cash, 'cashNetChart', lbls, [
-        { label: '現金', data: cashData, color: '#3A4A63', bg: 'rgba(58,74,99,0.1)' }
+        { label: '現金資產', data: cashData, color: '#3A4A63', bg: 'rgba(58,74,99,0.1)' }
     ]);
 
+    // 抓取基準線資料並執行精確的動態起點歸一化
     const bench = await fetchBenchmarkData();
     if (bench && bench['006208'].length > 0 && bench['SPY'].length > 0) {
-
         const matchPrice = (targetDateStr, benchHistory) => {
             const targetTime = new Date(targetDateStr).getTime();
             let closest = benchHistory[0]?.price || 0;
+            let minDiff = Infinity;
             for (let b of benchHistory) {
-                if (b.time <= targetTime + 86400000) closest = b.price;
-                else break;
+                const diff = Math.abs(b.time - targetTime);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = b.price;
+                }
             }
             return closest;
         };
@@ -1017,60 +831,56 @@ async function renderTrackingChart() {
         const rawData6208 = hist.map(i => matchPrice(i.date, bench['006208']));
         const rawDataSPY = hist.map(i => matchPrice(i.date, bench['SPY']));
 
-        let baseIndex = lbls.findIndex(l => l.includes('-03-17'));
-        if (baseIndex === -1) baseIndex = 0;
-
-        const nwTargetAmount = 4756878;
-        const stockTargetAmount = 2650517;
+        // 以歷史第一筆的實際淨值作為起點，不再寫死固定金額
+        const baseNwTarget = nwData[0] || 0;
+        const baseStockTarget = stockData[0] || 0;
 
         const normalize = (rawData, targetAmt) => {
-            const basePrice = rawData[baseIndex] || rawData[0];
-            if (!basePrice) return rawData;
+            const basePrice = rawData[0];
+            if (!basePrice || !targetAmt) return rawData;
             return rawData.map(price => (price / basePrice) * targetAmt);
         };
 
-        nwDatasets.push({
-            label: '006208 (對比總資產)',
-            data: normalize(rawData6208, nwTargetAmount),
-            color: 'rgba(243, 156, 18, 0.7)',
-            bg: 'transparent',
-            yAxisID: 'y',
-            isBenchmark: true
-        });
-        nwDatasets.push({
-            label: 'SPY',
-            data: normalize(rawDataSPY, nwTargetAmount),
-            color: 'rgba(155, 89, 182, 0.7)',
-            bg: 'transparent',
-            yAxisID: 'y',
-            isBenchmark: true
-        });
+        if (baseNwTarget > 0) {
+            nwDatasets.push({
+                label: '006208 (總資產對照)',
+                data: normalize(rawData6208, baseNwTarget),
+                color: 'rgba(243, 156, 18, 0.75)',
+                bg: 'transparent',
+                isBenchmark: true
+            });
+            nwDatasets.push({
+                label: 'SPY (總資產對照)',
+                data: normalize(rawDataSPY, baseNwTarget),
+                color: 'rgba(155, 89, 182, 0.75)',
+                bg: 'transparent',
+                isBenchmark: true
+            });
+            chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwDatasets);
+        }
 
-        stockDatasets.push({
-            label: '006208',
-            data: normalize(rawData6208, stockTargetAmount),
-            color: 'rgba(243, 156, 18, 0.7)',
-            bg: 'transparent',
-            yAxisID: 'y',
-            isBenchmark: true
-        });
-        stockDatasets.push({
-            label: 'SPY',
-            data: normalize(rawDataSPY, stockTargetAmount),
-            color: 'rgba(155, 89, 182, 0.7)',
-            bg: 'transparent',
-            yAxisID: 'y',
-            isBenchmark: true
-        });
-
-        chartInst.nw = drawLineChart(chartInst.nw, 'netWorthChart', lbls, nwDatasets);
-        chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockDatasets);
+        if (baseStockTarget > 0) {
+            stockDatasets.push({
+                label: '006208 (股票對照)',
+                data: normalize(rawData6208, baseStockTarget),
+                color: 'rgba(243, 156, 18, 0.75)',
+                bg: 'transparent',
+                isBenchmark: true
+            });
+            stockDatasets.push({
+                label: 'SPY (股票對照)',
+                data: normalize(rawDataSPY, baseStockTarget),
+                color: 'rgba(155, 89, 182, 0.75)',
+                bg: 'transparent',
+                isBenchmark: true
+            });
+            chartInst.stock = drawLineChart(chartInst.stock, 'stockNetChart', lbls, stockDatasets);
+        }
     }
 }
 
 async function saveCurrentNetWorth() {
     if (appData.totals.grandNet <= 0) return showToast('⚠️ 總資產異常');
-
     $('saveNwBtn').disabled = true;
     $('saveNwBtn').innerText = '儲存中...';
 
@@ -1098,138 +908,7 @@ async function saveCurrentNetWorth() {
     }
 }
 
-function addChangelog(type, symbol, detail) {
-    const ext = changelog.findIndex(c => c.symbol === symbol && c.type === type);
-    if (ext !== -1) changelog.splice(ext, 1);
-    changelog.push({ type, symbol, detail, time: new Date() });
-    renderChangelog();
-}
-
-function renderChangelog() {
-    $('changelog-badge').innerText = changelog.length;
-    $('changelog-badge').className = changelog.length ? 'changelog-badge' : 'changelog-badge empty';
-
-    if (!changelog.length) {
-        return $('changelog-body').innerHTML = '<div class="changelog-empty">無變更</div>';
-    }
-
-    const tags = { edit: ['EDIT', 'tag-edit'], add: ['NEW', 'tag-add'], del: ['DEL', 'tag-del'], cash: ['現金', 'tag-cash'] };
-
-    $('changelog-body').innerHTML = changelog.map(c => `
-                <div class="changelog-row">
-                    <div class="changelog-left">
-                        <span class="changelog-tag ${tags[c.type]?.[1]}">${tags[c.type]?.[0]}</span>
-                        <span class="changelog-symbol">${c.symbol}</span>
-                    </div>
-                    <div class="changelog-right">${c.detail}</div>
-                </div>
-            `).join('');
-}
-
-function renderEditView() {
-    $('edit-cash-input').value = appData.cash;
-
-    const html = (st, m) => {
-        if (!st.length) return `<div class="empty-state">目前無部位</div>`;
-        return st.map((s, i) => `
-                    <div class="edit-item">
-                        <div class="edit-symbol">${s.symbol}</div>
-                        <div class="edit-inputs">
-                            <div class="edit-input-wrapper">
-                                <span class="edit-label">股數</span>
-                                <input type="number" id="edit-${m}-sh-${i}" class="edit-input" value="${s.shares}">
-                            </div>
-                            <div class="edit-input-wrapper">
-                                <span class="edit-label">成本</span>
-                                <input type="number" id="edit-${m}-co-${i}" class="edit-input" value="${s.costPrice.toFixed(2)}">
-                            </div>
-                        </div>
-                        <div class="btn-action-group">
-                            <button class="btn-save" onclick="saveStock('${m}',${i})"><i class="fa-solid fa-check"></i></button>
-                            <button class="btn-del" onclick="deleteStock('${m}',${i})"><i class="fa-solid fa-xmark"></i></button>
-                        </div>
-                    </div>
-                `).join('');
-    };
-
-    $('edit-tw-list').innerHTML = html(appData.twStocks, 'tw');
-    $('edit-us-list').innerHTML = html(appData.usStocks, 'us');
-    renderChangelog();
-}
-
-async function saveCash() {
-    const val = parseFloat($('edit-cash-input').value);
-    if (!isNaN(val)) {
-        addChangelog('cash', 'TWD', `${appData.cash.toLocaleString()} → ${val.toLocaleString()}`);
-        appData.cash = val;
-        renderApp();
-        try {
-            await saveToCloud();
-            showToast('💰 現金已同步至雲端');
-        } catch (e) {
-            showToast('❌ 雲端儲存失敗，請檢查網路');
-        }
-    }
-}
-
-function saveStock(m, i) {
-    const sh = parseFloat($(`edit-${m}-sh-${i}`).value);
-    const co = parseFloat($(`edit-${m}-co-${i}`).value);
-
-    if (!isNaN(sh) && !isNaN(co)) {
-        const a = m === 'tw' ? appData.twStocks : appData.usStocks;
-        const s = a[i];
-        addChangelog('edit', s.symbol, `股 ${s.shares}→${sh}<br>成 ${s.costPrice.toFixed(2)}→${co.toFixed(2)}`);
-        s.shares = sh;
-        s.costPrice = co;
-        renderApp();
-        showToast('✓ 暫存成功');
-        isHistoryLoaded = false;
-    }
-}
-
-function deleteStock(m, i) {
-    if (confirm('確定要刪除持股嗎？')) {
-        const a = m === 'tw' ? appData.twStocks : appData.usStocks;
-        const sym = a[i].symbol;
-        a.splice(i, 1);
-        renderEditView();
-        renderApp();
-        addChangelog('del', sym, '已從投資組合移除');
-        showToast('移除 ' + sym);
-        isHistoryLoaded = false;
-    }
-}
-
-async function addNewStock() {
-    const m = $('add-market').value;
-    const sym = $('add-symbol').value.trim().toUpperCase();
-    const sh = parseFloat($('add-shares').value);
-    const co = parseFloat($('add-cost').value);
-
-    if (!sym || isNaN(sh) || isNaN(co)) return alert('請填寫完整的代號、股數與成本！');
-
-    const obj = {
-        symbol: m === 'TW' ? sym.replace(/\.TW$|\.TWO$/i, '') : sym,
-        shares: sh,
-        costPrice: co,
-        currentPrice: null,
-        prevClose: null,
-        isError: true
-    };
-
-    appData[m === 'TW' ? 'twStocks' : 'usStocks'].push(obj);
-    ['add-symbol', 'add-shares', 'add-cost'].forEach(id => $(id).value = '');
-
-    addChangelog('add', obj.symbol, `${m} · ${sh}股 · 成本 ${co}`);
-    showToast(`已加入 ${obj.symbol}`);
-
-    $('syncBtn').classList.add('spin');
-    await fetchPricesAndRender();
-    $('syncBtn').classList.remove('spin');
-    isHistoryLoaded = false;
-}
-
+// 🌟 4. 【績效】手機響應式優化：新增 5日(%) 排序，欄位順序調為 [代號, 當日%, 5日%, 22日%, 累計%]
 async function loadHistoryData() {
     isHistoryLoaded = true;
     $('history-progress-container').style.display = 'block';
@@ -1241,7 +920,7 @@ async function loadHistoryData() {
     const px = [u => `${WORKER_URL}${encodeURIComponent(u)}`];
 
     for (let s of stocks) {
-        await sleep(100);
+        await sleep(80);
         const sym = s.m === 'TW' ? `${s.symbol}.TW` : s.symbol;
         let ok = false;
 
@@ -1255,26 +934,33 @@ async function loadHistoryData() {
 
                 if (s.currentPrice && cList.length > 5) {
                     const getHist = d => {
-                        if (cList.length <= d) return { pct: 0, profit: 0 };
+                        if (cList.length <= d) return 0;
                         const histPrice = cList[cList.length - 1 - d];
-                        if (!histPrice) return { pct: 0, profit: 0 };
-                        const pct = ((s.currentPrice - histPrice) / histPrice) * 100;
-                        const exRate = s.m === 'US' ? appData.settings.usdToTwd : 1;
-                        const profit = (s.currentPrice - histPrice) * s.shares * exRate;
-                        return { pct, profit };
+                        if (!histPrice) return 0;
+                        return ((s.currentPrice - histPrice) / histPrice) * 100;
                     };
 
                     const d1r = s.prevClose ? ((s.currentPrice - s.prevClose) / s.prevClose * 100) : 0;
-                    const pD1 = s.prevClose ? (s.currentPrice - s.prevClose) * s.shares * (s.m === 'US' ? appData.settings.usdToTwd : 1) : 0;
                     const hist5 = getHist(5);
                     const hist22 = getHist(22);
-                    const exRate = s.m === 'US' ? appData.settings.usdToTwd : 1;
                     const totalCost = s.costPrice * s.shares;
                     const totalNet = s.currentPrice * s.shares;
-                    const totalProfit = (totalNet - totalCost) * exRate;
                     const totalProfitPct = totalCost > 0 ? ((totalNet - totalCost) / totalCost) * 100 : 0;
 
-                    appData.history.push({ market: s.m, symbol: s.symbol, d1: d1r, d5: hist5.pct, d22: hist22.pct, pD1: pD1, pM1: hist22.profit, totalProfit: totalProfit, totalProfitPct: totalProfitPct });
+                    const exRate = s.m === 'US' ? appData.settings.usdToTwd : 1;
+                    const pD1 = s.prevClose ? (s.currentPrice - s.prevClose) * s.shares * exRate : 0;
+                    const totalProfitAmt = (totalNet - totalCost) * exRate;
+
+                    appData.history.push({
+                        market: s.m,
+                        symbol: s.symbol,
+                        d1: d1r,
+                        d5: hist5,
+                        d22: hist22,
+                        totalProfitPct: totalProfitPct,
+                        pD1: pD1,
+                        totalProfitAmt: totalProfitAmt
+                    });
                     ok = true;
                 }
             } catch (e) { }
@@ -1306,62 +992,306 @@ function renderHistory() {
             if (a.market !== 'TW' && b.market === 'TW') return 1;
             return a.symbol.localeCompare(b.symbol);
         });
-    } else {
-        d.sort((a, b) => currentHeroMode === 'd1Pct' ? b.d1 - a.d1 : (currentHeroMode === 'd1Profit' ? b.pD1 - a.pD1 : b.pM1 - a.pM1));
+    } else if (currentHeroMode === 'd1Pct') {
+        d.sort((a, b) => b.d1 - a.d1);
+    } else if (currentHeroMode === 'd5Pct') {
+        d.sort((a, b) => b.d5 - a.d5); // 🌟 支援 5日(%) 排行
+    } else if (currentHeroMode === 'd22Pct') {
+        d.sort((a, b) => b.d22 - a.d22);
+    } else if (currentHeroMode === 'totalPct') {
+        d.sort((a, b) => b.totalProfitPct - a.totalProfitPct);
     }
 
     const fPct = v => `<span class="${clr(v)}">${fmtP(v)}</span>`;
-    const fPro = v => `<span class="${clr(v)}">${v > 0 ? '+' : ''}${fmtM(v)}</span>`;
 
-    const sumD1 = d.reduce((a, b) => a + (b.pD1 || 0), 0);
-    const sumTotalProfit = d.reduce((a, b) => a + (b.totalProfit || 0), 0);
-    const gridCols = "1fr 1.4fr 1.1fr 1.4fr 1.1fr 1.1fr 1.1fr";
+    // 整體組合報酬率計算
+    const sumCost = appData.totals.stockCost || 1;
+    const sumNet = appData.totals.stockNet || 0;
+    const totalRoi = ((sumNet - sumCost) / sumCost) * 100;
+    const totalD1Pct = sumNet > 0 ? (appData.totals.todayProfit / sumNet) * 100 : 0;
+
+    // 🌟 手機版精簡 5 欄 Grid：代號、當日(%)、5日(%)、22日(%)、累計(%)
+    const gridCols = "1.2fr 1fr 1fr 1fr 1fr";
 
     let h = `
-                <div class="history-grid" style="color:var(--text-muted); border-bottom:2px solid var(--border-light); padding-bottom:8px; grid-template-columns: ${gridCols};">
-                    <div class="col-name">代號</div>
-                    <div class="text-right">當日損益</div>
-                    <div>當日損益(%)</div>
-                    <div class="text-right">累計損益</div>
-                    <div>累計損益(%)</div>
-                    <div>5日(%)</div>
-                    <div>22日(%)</div>
-                </div>
-                <div class="history-grid" style="background:rgba(197,160,89,0.08); border-radius:6px; padding:10px 8px; margin:8px 0; border:none; grid-template-columns: ${gridCols};">
-                    <div class="col-name" style="color:var(--accent-gold);font-size:13px;">組合總計</div>
-                    <div class="num text-right" style="font-weight:700;font-size:13px">${fPro(sumD1)}</div>
-                    <div>-</div>
-                    <div class="num text-right" style="font-weight:700;font-size:13px">${fPro(sumTotalProfit)}</div>
-                    <div>-</div>
-                    <div>-</div>
-                    <div>-</div>
-                </div>
-            `;
+        <div class="history-grid" style="color:var(--text-muted); border-bottom:2px solid var(--border-light); padding-bottom:8px; grid-template-columns: ${gridCols}; font-size:12px;">
+            <div class="col-name">代號</div>
+            <div class="text-right">當日(%)</div>
+            <div class="text-right">5日(%)</div>
+            <div class="text-right">22日(%)</div>
+            <div class="text-right">累計(%)</div>
+        </div>
+        <div class="history-grid" style="background:rgba(197,160,89,0.08); border-radius:6px; padding:10px 8px; margin:8px 0; border:none; grid-template-columns: ${gridCols};">
+            <div class="col-name" style="color:var(--accent-gold); font-size:13px;">組合總計</div>
+            <div class="num text-right" style="font-weight:700;">${fPct(totalD1Pct)}</div>
+            <div class="text-right color-muted">-</div>
+            <div class="text-right color-muted">-</div>
+            <div class="num text-right" style="font-weight:700;">${fPct(totalRoi)}</div>
+        </div>
+    `;
 
     d.forEach(i => {
         h += `
-                    <div class="history-grid" style="grid-template-columns: ${gridCols};">
-                        <div class="col-name num">${i.symbol}</div>
-                        <div class="num text-right">${fPro(i.pD1)}</div>
-                        <div class="num">${fPct(i.d1)}</div>
-                        <div class="num text-right">${fPro(i.totalProfit)}</div>
-                        <div class="num">${fPct(i.totalProfitPct)}</div>
-                        <div class="num">${fPct(i.d5)}</div>
-                        <div class="num">${fPct(i.d22)}</div>
-                    </div>
-                `;
+            <div class="history-grid" style="grid-template-columns: ${gridCols};">
+                <div class="col-name num font-bold">${i.symbol}</div>
+                <div class="num text-right">${fPct(i.d1)}</div>
+                <div class="num text-right">${fPct(i.d5)}</div>
+                <div class="num text-right">${fPct(i.d22)}</div>
+                <div class="num text-right">${fPct(i.totalProfitPct)}</div>
+            </div>
+        `;
     });
     div.innerHTML = h;
 }
 
+// 🌟 5. 【資產配比】新分頁：完整實作四桶投資框架、穿透計算與再平衡警示
+function calculateBucketsData() {
+    const totalGrandNet = appData.totals.grandNet || 1;
+    const exRate = appData.settings.usdToTwd || 31.5;
+
+    const findHolding = (symbol, market) => {
+        const pool = market === 'TW' ? appData.twStocks : appData.usStocks;
+        return pool.find(s => s.symbol === symbol);
+    };
+
+    const bucketsResult = {};
+    const alertList = [];
+
+    for (const [bKey, bDef] of Object.entries(FOUR_BUCKETS)) {
+        let bucketTotalTwd = 0;
+        const holdingsDetails = [];
+
+        if (bKey === 'cash') {
+            if (appData.cash > 0) {
+                bucketTotalTwd += appData.cash;
+                holdingsDetails.push({
+                    symbol: 'TWD 現金',
+                    sub: '流動現金',
+                    market: 'TW',
+                    shares: 1,
+                    priceStr: '1.00',
+                    twdNet: appData.cash
+                });
+            }
+        }
+
+        for (const [sym, info] of Object.entries(bDef.symbols)) {
+            const h = findHolding(sym, info.market);
+            if (h && h.shares > 0) {
+                const price = h.isError ? h.costPrice : (h.currentPrice || h.costPrice);
+                const isUS = info.market === 'US';
+                const twdVal = price * h.shares * (isUS ? exRate : 1);
+
+                bucketTotalTwd += twdVal;
+                holdingsDetails.push({
+                    symbol: sym,
+                    sub: info.sub,
+                    market: info.market,
+                    shares: h.shares,
+                    priceStr: (isUS ? '$ ' : '') + price.toFixed(2),
+                    twdNet: twdVal
+                });
+            }
+        }
+
+        const pct = (bucketTotalTwd / totalGrandNet) * 100;
+        let status = 'in-range';
+        let actionIcon = '→';
+        let actionText = '合理，無須動作';
+
+        if (bKey === 'core') {
+            if (pct < bDef.targetMin) {
+                status = 'need-buy';
+                actionIcon = '↑';
+                const diffAmt = (totalGrandNet * (bDef.targetMid / 100)) - bucketTotalTwd;
+                actionText = `低於 40% 下限，須優先補 (缺口約 NT$ ${fmtM(diffAmt)})`;
+                alertList.push({
+                    type: 'warning',
+                    msg: `<strong>Core Beta 偏低 (${pct.toFixed(1)}%)</strong>：低於 40% 下限值，建議自 現金/債部位 分批回補約 NT$ ${fmtM(diffAmt)}，優先補 VTI、006208。`
+                });
+            } else if (pct > bDef.targetMax) {
+                status = 'need-trim';
+                actionIcon = '↓';
+                actionText = `高於 45% 上限 (年度再平衡時再移)`;
+            }
+        } else if (bKey === 'growth') {
+            if (pct >= bDef.hardMax) {
+                status = 'hard-cap';
+                actionIcon = '🚨';
+                const diffAmt = bucketTotalTwd - (totalGrandNet * (bDef.targetMax / 100));
+                actionText = `超過上限值，請立即調整平衡 (超額約 NT$ ${fmtM(diffAmt)})`;
+                alertList.push({
+                    type: 'danger',
+                    msg: `<strong>Growth Beta 嚴重偏高 (${pct.toFixed(1)}%)</strong>：已超過 30% 高度曝險！超額約 NT$ ${fmtM(diffAmt)} 必須移出：若 Core 偏低先補 Core，否則進 現金/債部位。`
+                });
+            } else if (pct > bDef.targetMax) {
+                status = 'need-trim';
+                actionIcon = '↓';
+                const diffAmt = bucketTotalTwd - (totalGrandNet * (bDef.targetMid / 100));
+                actionText = `超出 25% 上限 (超額約 NT$ ${fmtM(diffAmt)})`;
+                alertList.push({
+                    type: 'warning',
+                    msg: `<strong>Growth Beta 超出區間 (${pct.toFixed(1)}%)</strong>：風險預算放大，建議移出超額 NT$ ${fmtM(diffAmt)} 至 Core 或 SGOV。`
+                });
+            } else if (pct < bDef.targetMin) {
+                status = 'need-buy';
+                actionIcon = '↑';
+                actionText = `低於 20% (優先補Core Beta，再補這裡)`;
+            }
+        } else if (bKey === 'alpha') {
+            if (pct > bDef.hardMax) {
+                status = 'hard-cap';
+                actionIcon = '🚨';
+                const diffAmt = bucketTotalTwd - (totalGrandNet * (bDef.targetMax / 100));
+                actionText = `超過 15% 限制，已曝險過高 (超額約 NT$ ${fmtM(diffAmt)})`;
+                alertList.push({
+                    type: 'danger',
+                    msg: `<strong>Alpha 突破 15% 硬頂 (${pct.toFixed(1)}%)</strong>：超額約 NT$ ${fmtM(diffAmt)} 必須立即減碼漲多標的，資金回流 SGOV，切勿轉入 Growth。`
+                });
+            }
+        } else if (bKey === 'cash') {
+            if (pct < bDef.hardMin) {
+                status = 'hard-cap';
+                actionIcon = '🚨';
+                actionText = `低於20%下限 目前防禦不足`;
+                alertList.push({
+                    type: 'danger',
+                    msg: `<strong>現金／債 嚴重不足 (${pct.toFixed(1)}%)</strong>：已低於 15% ！防禦力不足，嚴禁再動用任何資金抄底。`
+                });
+            } else if (pct < bDef.targetMin) {
+                status = 'need-buy';
+                actionIcon = '↑';
+                actionText = `低於 20% (防禦已不足)`;
+                alertList.push({
+                    type: 'warning',
+                    msg: `<strong>現金／債 偏低 (${pct.toFixed(1)}%)</strong>：低於 20% 防禦下緣，目前子彈打太滿，暫停主動加碼。`
+                });
+            } else if (pct > bDef.targetMax) {
+                status = 'in-range';
+                actionIcon = '→';
+                actionText = `超過上限值 (機會成本已偏高)`;
+            }
+        }
+
+        bucketsResult[bKey] = {
+            ...bDef,
+            totalTwd: bucketTotalTwd,
+            pct: pct,
+            status: status,
+            actionIcon: actionIcon,
+            actionText: actionText,
+            holdings: holdingsDetails
+        };
+    }
+
+    return { buckets: bucketsResult, alerts: alertList, totalGrandNet };
+}
+
+function renderAllocationView() {
+    const { buckets, alerts, totalGrandNet } = calculateBucketsData();
+
+    // 1. 渲染警示看板
+    const alertBox = $('rebalance-alert-box');
+    if (alertBox) {
+        if (alerts.length === 0) {
+            alertBox.innerHTML = `
+                <div class="alert-banner alert-ok">
+                    <i class="fa-solid fa-circle-check mt-2" style="font-size:16px;"></i>
+                    <div><strong>區塊配置皆在安全警示區間內</strong><br>請維持紀律，中間的市場波動不構成動作條件。</div>
+                </div>
+            `;
+        } else {
+            alertBox.innerHTML = alerts.map(a => `
+                <div class="alert-banner alert-${a.type}">
+                    <i class="fa-solid ${a.type === 'danger' ? 'fa-triangle-exclamation' : 'fa-circle-exclamation'} mt-2" style="font-size:16px;"></i>
+                    <div>${a.msg}</div>
+                </div>
+            `).join('');
+        }
+    }
+
+    // 2. 渲染雙層長條圖
+    const summarySpan = $('alloc-actual-summary');
+    if (summarySpan) {
+        summarySpan.innerHTML = `Core ${buckets.core.pct.toFixed(0)}% ｜ Growth ${buckets.growth.pct.toFixed(0)}% ｜ Alpha ${buckets.alpha.pct.toFixed(0)}% ｜ 現金/債 ${buckets.cash.pct.toFixed(0)}%`;
+    }
+
+    const actualBar = $('alloc-actual-bar');
+    if (actualBar) {
+        actualBar.innerHTML = `
+            <div class="bar-seg bar-seg-core" style="width: ${buckets.core.pct}%;" title="Core Beta: ${buckets.core.pct.toFixed(1)}%"></div>
+            <div class="bar-seg bar-seg-growth" style="width: ${buckets.growth.pct}%;" title="Growth Beta: ${buckets.growth.pct.toFixed(1)}%"></div>
+            <div class="bar-seg bar-seg-alpha" style="width: ${buckets.alpha.pct}%;" title="Alpha: ${buckets.alpha.pct.toFixed(1)}%"></div>
+            <div class="bar-seg bar-seg-cash" style="width: ${buckets.cash.pct}%;" title="現金／債: ${buckets.cash.pct.toFixed(1)}%"></div>
+        `;
+    }
+
+    // 3. 渲染四大桶現況卡片與明細
+    const cardsList = $('bucket-cards-list');
+    if (!cardsList) return;
+
+    const bucketKeys = ['core', 'growth', 'alpha', 'cash'];
+    cardsList.innerHTML = bucketKeys.map(k => {
+        const b = buckets[k];
+        const tagClass = b.status === 'in-range' ? 'tag-in-range' :
+                        (b.status === 'need-buy' ? 'tag-need-buy' :
+                        (b.status === 'hard-cap' ? 'tag-hard-cap' : 'tag-need-trim'));
+
+        const holdingsRows = b.holdings.length === 0
+            ? '<div class="empty-state" style="padding:10px 0;">目前無此桶部位</div>'
+            : b.holdings.map(h => {
+                const hBucketPct = b.totalTwd > 0 ? (h.twdNet / b.totalTwd * 100).toFixed(1) : '0.0';
+                const hTotalPct = (h.twdNet / totalGrandNet * 100).toFixed(1);
+                return `
+                    <div class="bucket-sub-item">
+                        <div>
+                            <strong>${h.symbol}</strong>
+                            <span class="color-muted" style="font-size:11px; margin-left:6px;">${h.sub}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="num font-bold">NT$ ${fmtM(h.twdNet)}</span>
+                            <div class="color-muted num" style="font-size:11px;">桶佔 ${hBucketPct}% · 總資產 ${hTotalPct}%</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        return `
+            <div class="card bucket-card bucket-${k}" id="card-bucket-${k}" onclick="toggleCard('card-bucket-${k}')">
+                <div class="card-header cursor-pointer">
+                    <div class="card-title-group">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h2 class="card-title" style="margin-bottom:0;">${b.name}</h2>
+                            <span class="allocation-tag ${tagClass}">${b.actionIcon} ${b.actionText}</span>
+                        </div>
+                        <span class="card-subtitle" style="margin-top:4px;">${b.subtitle} ｜ 目標 ${b.targetMin}%～${b.targetMax}% (中位 ${b.targetMid}%)</span>
+                    </div>
+                    <div class="text-right">
+                        <div class="card-value num">NT$ ${fmtM(b.totalTwd)}</div>
+                        <div class="card-roi num font-bold" style="color: ${b.color};">${b.pct.toFixed(1)}%</div>
+                    </div>
+                </div>
+
+                <div class="list-container" style="padding-top: 10px;">
+                    <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px; border-bottom:1px solid var(--border-light); padding-bottom:4px;">
+                        包含標的與子分類明細：
+                    </div>
+                    ${holdingsRows}
+                </div>
+
+                <div class="card-toggle-icon"><i class="fa-solid fa-chevron-down"></i></div>
+            </div>
+        `;
+    }).join('');
+}
+
+// 🌟 6. 【編輯】持股部位管理
 function renderEditHoldingsView() {
     const container = $('edit-holdings-list');
     if (!container) return;
 
     const cashInput = $('edit-page-cash-input');
-    if (cashInput) {
-        cashInput.value = appData.cash;
-    }
+    if (cashInput) cashInput.value = appData.cash;
 
     const allHoldings = [
         ...appData.twStocks.map(s => ({ ...s, market: 'TW' })),
@@ -1427,11 +1357,8 @@ function addHolding() {
         isError: true
     };
 
-    if (market === 'TW') {
-        appData.twStocks.push(newHolding);
-    } else {
-        appData.usStocks.push(newHolding);
-    }
+    if (market === 'TW') appData.twStocks.push(newHolding);
+    else appData.usStocks.push(newHolding);
 
     renderEditHoldingsView();
     showToast(`✅ 已加入 ${fullSymbol}，請填寫股數與成本後儲存`);
@@ -1443,12 +1370,12 @@ function removeHolding(buttonElement) {
     if (!itemElement) return;
 
     const fullSymbol = itemElement.getAttribute('data-symbol');
-    if (!confirm(`確定要從編輯列表中移除 ${fullSymbol} 嗎？\n此操作不會立即儲存，需點擊下方儲存按鈕才會生效。`)) {
+    if (!confirm(`確定要從編輯列表中移除 ${fullSymbol} 嗎？\n此操作需點擊下方儲存按鈕才會同步至雲端。`)) {
         return;
     }
 
     itemElement.remove();
-    showToast(`🗑️ 已從列表移除 ${fullSymbol}，請記得儲存變更`);
+    showToast(`🗑️ 已自列表移除 ${fullSymbol}`);
 
     const container = $('edit-holdings-list');
     if (container.children.length === 0) {
@@ -1477,7 +1404,6 @@ async function saveHoldings() {
         }
 
         const [symbol, market] = fullSymbol.split('.');
-
         const holding = {
             symbol: symbol,
             shares: shares,
@@ -1487,74 +1413,156 @@ async function saveHoldings() {
             isError: true
         };
 
-        if (market === 'TW') {
-            newTwStocks.push(holding);
-        } else if (market === 'US') {
-            newUsStocks.push(holding);
-        }
+        if (market === 'TW') newTwStocks.push(holding);
+        else if (market === 'US') newUsStocks.push(holding);
     });
 
     if (hasError) {
         showToast('❌ 部分資料格式錯誤，請檢查後再儲存');
         saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更';
+        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更至雲端';
         return;
     }
 
     const cashInput = $('edit-page-cash-input');
     const newCashValue = parseFloat(cashInput.value);
-
     if (isNaN(newCashValue)) {
-        showToast('❌ 現金部位格式錯誤，請檢查後再儲存');
+        showToast('❌ 現金部位格式錯誤');
         saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更';
+        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更至雲端';
         return;
     }
 
-    // Update local appData with all changes from the page
     appData.cash = newCashValue;
     appData.twStocks = newTwStocks;
     appData.usStocks = newUsStocks;
 
-    const payload = {
-        cash: appData.cash, // Now contains the updated value
-        netWorthHistory: appData.netWorthHistory,
-        transactions: appData.transactions,
-        holdings: [
-            ...appData.twStocks.map(s => ({ market: 'TW', symbol: s.symbol, shares: s.shares, costPrice: s.costPrice })),
-            ...appData.usStocks.map(s => ({ market: 'US', symbol: s.symbol, shares: s.shares, costPrice: s.costPrice }))
-        ]
-    };
-
     try {
-        const res = await fetch(DB_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Master-Key': SECRET_KEY },
-            body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) {
-            throw new Error(`伺服器回應錯誤 (${res.status})`);
-        }
-
-        const result = await res.json();
-        if (result.success) {
-            showToast('✅ 持股資料已成功同步至雲端！');
-            isHistoryLoaded = false;
-            try {
-                await fetchPricesAndRender();
-            } catch (refreshError) {
-                showToast('⚠️ 同步成功，但價格刷新失敗，請手動刷新。');
-                console.error("Error during post-save refresh:", refreshError);
-            }
-        } else {
-            throw new Error(result.error || '儲存失敗');
-        }
+        await saveToCloud();
+        showToast('✅ 持股與現金已同步至雲端！');
+        isHistoryLoaded = false;
+        await fetchPricesAndRender();
     } catch (e) {
-        showToast(`❌ 儲存至雲端失敗: ${e.message}`);
+        showToast(`❌ 儲存失敗: ${e.message}`);
     } finally {
         saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更';
+        saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 儲存所有變更至雲端';
+    }
+}
+
+// 🌟 7. 【資訊】全球監控與三大法人籌碼
+async function renderInfoView() {
+    const symbols = {
+        'twii': '^TWII',
+        'gspc': '^GSPC',
+        'txf': 'EWT',
+        'twdx': 'TWD=X',
+        'vix': '^VIX',
+        'oil': 'BZ=F',
+        'tsm': 'TSM',
+        'tnx': '^TNX',
+        'futw': 'FTCRTWNT.FGI'
+    };
+
+    const priceMap = await fetchHybridYahooQuotes(Object.values(symbols));
+
+    for (const [id, sym] of Object.entries(symbols)) {
+        const data = priceMap[sym];
+        if (data) {
+            const chg = data.price - data.prevClose;
+            const pct = (chg / data.prevClose) * 100;
+
+            const valEl = id === 'futw' ? $('info-futw-val') :$(`mkt-${id}`);
+            const chgEl = id === 'futw' ? $('info-futw-chg') :$(`mkt-${id}-chg`);
+            const timeEl = id === 'futw' ? $('info-futw-time') :$(`mkt-${id}-time`);
+
+            if (valEl) valEl.innerText = data.price.toLocaleString(undefined, { minimumFractionDigits: 2 });
+            if (chgEl) {
+                chgEl.innerText = `${chg > 0 ? '+' : ''}${chg.toFixed(2)} (${fmtP(pct)})`;
+                chgEl.className = `market-chg num ${clr(chg)}`;
+            }
+
+            if (timeEl) {
+                const d = new Date(data.time);
+                const timeStr = `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+                let stateStr = '收盤';
+                let stateColor = '#8A94A6';
+                let stateIcon = '🌑';
+
+                const now = new Date().getTime();
+                const diffMins = Math.abs(now - data.time) / (1000 * 60);
+                const is24hMarket = ['TWD=X', 'BZ=F', '^VIX'].includes(sym);
+                const isLive = (data.state === 'REGULAR') || (is24hMarket && diffMins < 45) || (!data.state && diffMins < 30);
+
+                if (isLive) {
+                    stateStr = '盤中';
+                    stateColor = '#549B7B';
+                    stateIcon = '🟢';
+                } else if (data.state === 'PRE' || data.state === 'PREPRE') {
+                    stateStr = '盤前';
+                    stateColor = '#C5A059';
+                    stateIcon = '🟡';
+                } else if (data.state === 'POST') {
+                    stateStr = '盤後';
+                    stateColor = '#3A4A63';
+                    stateIcon = '🔵';
+                }
+
+                timeEl.innerHTML = `<span style="color: ${stateColor}; font-size: 12px; font-weight: 500;">${stateIcon} ${stateStr} ${timeStr}</span>`;
+            }
+        }
+    }
+
+    await fetchInstitutionalData();
+}
+
+async function fetchInstitutionalData() {
+    try {
+        const apiUrl = `https://www.twse.com.tw/fund/BFI82U?response=json&type=day&_=${Date.now()}`;
+        const proxyUrl = `${WORKER_URL}${encodeURIComponent(apiUrl)}`;
+
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error('無法取得證交所資料');
+
+        const json = await res.json();
+        if (json.stat !== 'OK' || !json.data) throw new Error('三大法人資料格式異常');
+
+        let reportDate = "最新交易日";
+        if (json.date && json.date.length === 8) {
+            reportDate = `${json.date.substring(0, 4)}/${json.date.substring(4, 6)}/${json.date.substring(6, 8)}`;
+        }
+
+        const parseToYi = str => parseInt(str.replace(/,/g, ''), 10) / 100000000;
+
+        let dealer = 0, trust = 0, foreign = 0;
+        json.data.forEach(row => {
+            const name = row[0];
+            const netVal = parseToYi(row[3]);
+            if (name.includes('自營商(自行買賣)') || name.includes('自營商(避險)')) dealer += netVal;
+            else if (name.includes('投信')) trust = netVal;
+            else if (name.includes('外資及陸資') || name.includes('外資自營商')) foreign += netVal;
+        });
+
+        const updateChipCard = (elementId, dateId, value) => {
+            const el = $(elementId);
+            const dateEl = $(dateId);
+            if (!el) return;
+
+            const displayStr = value > 0 ? `+${value.toFixed(1)}` : value.toFixed(1);
+            el.textContent = displayStr;
+            el.className = 'market-val num ' + (value > 0 ? 'color-up' : (value < 0 ? 'color-down' : ''));
+            if (dateEl) dateEl.textContent = reportDate;
+        };
+
+        updateChipCard('info-foreign-val', 'info-foreign-date', foreign);
+        updateChipCard('info-trust-val', 'info-trust-date', trust);
+        updateChipCard('info-dealer-val', 'info-dealer-date', dealer);
+    } catch (error) {
+        console.error('抓取籌碼資料失敗:', error);
+        ['info-foreign-val', 'info-trust-val', 'info-dealer-val'].forEach(id => {
+            if ($(id))$(id).textContent = '暫無資料';
+        });
     }
 }
 
@@ -1580,93 +1588,18 @@ async function fetchBenchmarkData() {
     }
 }
 
+async function saveCash() {
+    const val = parseFloat($('edit-cash-input')?.value);
+    if (!isNaN(val)) {
+        appData.cash = val;
+        renderApp();
+        try {
+            await saveToCloud();
+            showToast('💰 現金已同步至雲端');
+        } catch (e) {
+            showToast('❌ 雲端儲存失敗');
+        }
+    }
+}
+
 window.onload = () => refreshData(false);
-
-async function fetchNewsData() {
-    const listDiv = document.querySelector('#news-content .news-list');
-    if (listDiv) listDiv.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> 正在從邊緣節點讀取新聞...</div>';
-
-    try {
-        const res = await fetch(`${DB_URL}?type=news`, {
-            headers: { 'X-Master-Key': SECRET_KEY }
-        });
-
-        if (!res.ok) throw new Error('伺服器回應錯誤');
-
-        const data = await res.json();
-
-        let allNews = [];
-
-        if (data && data.articles) {
-            if (data.articles.fx) {
-                allNews = allNews.concat(data.articles.fx.map(item => ({ ...item, category: 'CURRENCY' })));
-            }
-            if (data.articles.tw) {
-                allNews = allNews.concat(data.articles.tw.map(item => ({ ...item, category: 'TW STOCK' })));
-            }
-            if (data.articles.us) {
-                allNews = allNews.concat(data.articles.us.map(item => ({ ...item, category: 'US STOCK' })));
-            }
-        } else if (Array.isArray(data)) {
-            allNews = data;
-        }
-
-        const strictTimeLimit = new Date(Date.now() - 48 * 60 * 60 * 1000);
-
-        allNews = allNews
-            .filter(item => new Date(item.pubDate) >= strictTimeLimit)
-            .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-
-        appData.news = allNews;
-        appData.newsUpdatedTime = data.updatedTime || null;
-
-        renderNewsView();
-    } catch (e) {
-        console.error("抓取新聞失敗:", e);
-        if (listDiv) listDiv.innerHTML = '<div class="empty-state color-down">讀取新聞失敗，請檢查 API 或是 Worker 設定。</div>';
-    }
-}
-
-function renderNewsView() {
-    const listDiv = document.querySelector('#news-content .news-list');
-    if (!listDiv) return;
-
-    if (!appData.news || appData.news.length === 0) {
-        listDiv.innerHTML = '<div class="empty-state">目前無新聞資料</div>';
-        return;
-    }
-
-    const subtitle = document.querySelector('.news-hero-subtitle');
-    if (subtitle) {
-        let timeStr = appData.newsUpdatedTime || appData.news[0].pubDate;
-        let displayTime = '剛剛';
-
-        if (timeStr) {
-            try {
-                const d = new Date(timeStr);
-                displayTime = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-            } catch (e) {
-                displayTime = timeStr;
-            }
-        }
-        subtitle.innerHTML = `最後更新：${displayTime}<br>目前使用關鍵字：台股、美股、美元匯率、國際局勢`;
-    }
-
-    const cardsHtml = appData.news.map(item => {
-        const tag = item.category || 'BUSINESS';
-        const itemDate = item.pubDate ? new Date(item.pubDate).toLocaleString('zh-TW', { hour12: false, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-
-        return `
-        <div class="news-card">
-            <h2 class="news-card-title" style="font-size: 16px; line-height: 1.4; letter-spacing: 1px;">${item.title}</h2>
-            <span class="news-card-tag">${tag}</span>
-            <div class="news-card-footer" style="margin-top: 15px;">
-                <span class="news-card-date">${itemDate}</span>
-                <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="news-card-link">繼續閱讀..</a>
-            </div>
-        </div>
-        `;
-    }).join('');
-
-    listDiv.innerHTML = cardsHtml;
-}
