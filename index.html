@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>高奢菁英 | 總資產指揮中心 V4.3</title>
+    <title>高奢菁英 | 總資產指揮中心 V4.4</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#FDFCF8">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,6 +14,179 @@
     <link rel="stylesheet" href="css/all.min.css">
     <link rel="stylesheet" href="css/my-css.css">
     <style>
+
+        /* V4.4 頂部導航優化 (7個分頁平鋪) */
+        .top-nav {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 4px;
+        }
+        .nav-item {
+            flex: 1;
+            min-width: 0;
+            padding: 10px 2px;
+            font-size: 11px;
+            gap: 3px;
+        }
+        .nav-item i {
+            font-size: 16px;
+        }
+        @media (max-width: 480px) {
+            .nav-item span {
+                font-size: 10px;
+            }
+            .nav-item i {
+                font-size: 14px;
+            }
+        }
+
+        /* V4.4 估值分頁專屬高奢菁英樣式 */
+        .valuation-item {
+            padding: 14px 12px;
+            border-bottom: 1px solid var(--border-light, #eee);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #fff;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            transition: all 0.25s ease;
+        }
+        .valuation-item:hover {
+            box-shadow: 0 4px 12px rgba(44, 62, 80, 0.08);
+            border-color: rgba(197, 160, 89, 0.4);
+        }
+        .valuation-item:last-child {
+            margin-bottom: 0;
+        }
+        .valuation-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .valuation-stock-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .valuation-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        }
+        .badge-tw {
+            background: rgba(197, 160, 89, 0.15);
+            color: #9E7D3B;
+            border: 1px solid rgba(197, 160, 89, 0.3);
+        }
+        .badge-us {
+            background: rgba(91, 141, 184, 0.15);
+            color: #35628A;
+            border: 1px solid rgba(91, 141, 184, 0.3);
+        }
+        .valuation-symbol {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-navy, #2C3E50);
+        }
+        .valuation-sub-text {
+            font-size: 12px;
+            color: var(--text-muted, #8A94A6);
+        }
+        .valuation-price-box {
+            text-align: right;
+        }
+        .valuation-price-label {
+            font-size: 10px;
+            color: var(--text-muted, #8A94A6);
+            display: block;
+        }
+        .valuation-current-price {
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-navy, #2C3E50);
+        }
+        .valuation-inputs-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+        @media (max-width: 600px) {
+            .valuation-inputs-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+        .valuation-input-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .valuation-input-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted, #64748B);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .valuation-upside {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+        .upside-up {
+            color: #2D6A4F;
+            background: rgba(84, 155, 123, 0.12);
+        }
+        .upside-down {
+            color: #B33939;
+            background: rgba(217, 107, 107, 0.12);
+        }
+        .upside-flat {
+            color: #8A94A6;
+            background: rgba(138, 148, 166, 0.12);
+        }
+        .valuation-input {
+            width: 100%;
+            padding: 9px 12px;
+            border: 1px solid var(--border-light, #E2E8F0);
+            border-radius: 8px;
+            background: #FAFAFA;
+            font-size: 13px;
+            color: #1A2436;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .valuation-input:focus {
+            outline: none;
+            border-color: var(--accent-gold, #C5A059);
+            background: #FFF;
+            box-shadow: 0 0 0 3px rgba(197, 160, 89, 0.15);
+        }
+        .valuation-input::placeholder {
+            color: #A0AEC0;
+            font-size: 12px;
+        }
+        .valuation-meta-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-muted, #8A94A6);
+            padding-top: 2px;
+        }
+
         /* V4.2 資產配比與樣式優化 */
         .allocation-tag {
             font-size: 11px;
@@ -111,6 +284,9 @@
         </div>
         <div class="nav-item" onclick="navTo('allocation', this)">
             <i class="fa-solid fa-cubes-stacked"></i><span>配比</span>
+        </div>
+        <div class="nav-item" onclick="navTo('valuation', this)">
+            <i class="fa-solid fa-crosshairs"></i><span>估值</span>
         </div>
         <div class="nav-item" onclick="navTo('tracking', this)">
             <i class="fa-solid fa-chart-area"></i><span>追蹤</span>
@@ -222,13 +398,13 @@
                     <div class="card-header mb-0">
                         <div class="card-title-group">
                             <h2 class="card-title">戰略配置對比</h2>
-                            <span class="card-subtitle">即時比例 vs. 目標中位基準線</span>
+                            <span class="card-subtitle">即時比例 vs. 目標基準線</span>
                         </div>
                     </div>
 
                     <div class="compare-bar-container">
                         <div class="compare-bar-label">
-                            <span>當前實際配比</span>
+                            <span>當前配比</span>
                             <span id="alloc-actual-summary">計算中...</span>
                         </div>
                         <div class="stacked-bar-multi" id="alloc-actual-bar">
@@ -241,7 +417,7 @@
 
                     <div class="compare-bar-container" style="margin-top: 15px;">
                         <div class="compare-bar-label">
-                            <span>目標中位基準</span>
+                            <span>目標基準</span>
                             <span>Core 42% ｜ Growth 23% ｜ Alpha 12% ｜ 現金/債 23%</span>
                         </div>
                         <div class="stacked-bar-multi">
@@ -262,6 +438,43 @@
 
                 <!-- 四大桶明細卡片清單 (支援展開) -->
                 <div id="bucket-cards-list"></div>
+            </div>
+
+
+            <!-- 新增：估值 (Valuation) -->
+            <div id="valuation-content" class="hide">
+                <div class="card cursor-default">
+                    <div class="card-header pb-12 align-center">
+                        <div class="card-title-group">
+                            <h2 class="card-title">標的估值與目標價管理</h2>
+                            <span class="card-subtitle">AI自動更新法人目標價與理由，即時數據同步</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="valuation-search-input" placeholder="🔍 搜尋標的..." 
+                                oninput="filterValuations(this.value)"
+                                style="padding: 6px 12px; font-size: 12px; border: 1px solid var(--border-light, #E2E8F0); border-radius: 6px; background: #fff; width: 130px; font-family: inherit;">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px; font-size: 12px;">
+                        <div style="background: rgba(44, 62, 80, 0.05); padding: 8px 12px; border-radius: 6px; flex: 1;">
+                            <span class="color-muted">持股標的總數：</span>
+                            <strong id="val-total-count" class="num" style="color: var(--text-navy, #2C3E50);">0</strong> 檔
+                        </div>
+                        <div style="background: rgba(197, 160, 89, 0.1); padding: 8px 12px; border-radius: 6px; flex: 1;">
+                            <span class="color-muted">已設定目標價：</span>
+                            <strong id="val-set-count" class="num" style="color: #9E7D3B;">0</strong> 檔
+                        </div>
+                    </div>
+
+                    <div id="valuation-list-container">
+                        <div class="empty-state">標的資料載入中...</div>
+                    </div>
+                </div>
+
+                <button class="save-to-cloud-btn" id="btn-save-valuations" onclick="saveValuations()">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> 修改完成
+                </button>
             </div>
 
             <!-- 3. 追蹤 (Tracking) -->
