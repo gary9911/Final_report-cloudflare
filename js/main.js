@@ -76,6 +76,7 @@ const appData = {
     history: [],
     netWorthHistory: [],
     transactions: [],
+    valuations: {},
     totals: { grandNet: 0, grandCost: 0, stockNet: 0, stockCost: 0, twNet: 0, usNet: 0, todayProfit: 0 },
     marketTime: { tw: null, us: null },
     benchmarkData: null
@@ -153,6 +154,13 @@ async function loadFromCloudflareKV() {
         appData.cash = Number(data.cash) || 0;
         appData.netWorthHistory = data.netWorthHistory || [];
         appData.transactions = data.transactions || [];
+        appData.valuations = data.valuations || {};
+        try {
+            const localVal = localStorage.getItem('wealth_valuations');
+            if (localVal && Object.keys(appData.valuations).length === 0) {
+                appData.valuations = JSON.parse(localVal);
+            }
+        } catch(e) {}
 
         if (data.holdings) {
             data.holdings.forEach(h => {
@@ -185,7 +193,8 @@ async function saveToCloud() {
         holdings: [
             ...appData.twStocks.map(s => ({ market: 'TW', symbol: s.symbol, shares: s.shares, costPrice: s.costPrice })),
             ...appData.usStocks.map(s => ({ market: 'US', symbol: s.symbol, shares: s.shares, costPrice: s.costPrice }))
-        ]
+        ],
+        valuations: appData.valuations || {}
     };
 
     try {
@@ -316,6 +325,7 @@ async function fetchPricesAndRender(forceRefresh = false) {
 
     renderApp();
     if (currentTab === 'allocation') renderAllocationView();
+    if (currentTab === 'valuation') renderValuationView();
     if (currentTab === 'tracking') renderTrackingChart();
     if (currentTab === 'transactions') renderEditHoldingsView();
 }
@@ -427,9 +437,18 @@ function updateHeroBanner(v) {
     const isTracking = (v === 'tracking');
     const isHistory = (v === 'history');
     const isAlloc = (v === 'allocation');
+    const isValuation = (v === 'valuation');
 
     if ($('hero-main-title')) {
-        $('hero-main-title').innerText = isSt ? '股票資產總淨值' : (isAlloc ? '資產總覽與配比' : '總資產淨值');
+        if (isValuation) {
+            $('hero-main-title').innerText = '股票估值與目標管理';
+        } else if (isAlloc) {
+            $('hero-main-title').innerText = '資產總覽與配比';
+        } else if (isSt) {
+            $('hero-main-title').innerText = '股票資產總淨值';
+        } else {
+            $('hero-main-title').innerText = '總資產淨值';
+        }
     }
 
     const mainAmount = isSt ? appData.totals.stockNet : appData.totals.grandNet;
@@ -438,7 +457,16 @@ function updateHeroBanner(v) {
     const subInfo = document.querySelector('.hero-sub-info');
     if (!subInfo) return;
 
-    if (isTracking || isAlloc) {
+    if (isValuation) {
+        const totalCount = appData.twStocks.length + appData.usStocks.length;
+        const valKeys = Object.keys(appData.valuations || {});
+        const setValCount = valKeys.filter(k => appData.valuations[k] && appData.valuations[k].targetPrice > 0).length;
+        subInfo.innerHTML = `
+            <div><span style="color: #2C3E50; font-weight: 600;">追蹤標的</span><strong class="num" style="color: var(--text-navy);">${totalCount} 檔</strong></div>
+            <div><span style="color: #5B8DB8; font-weight: 600;">已設目標</span><strong class="num" style="color: #C5A059;">${setValCount} 檔</strong></div>
+            <div><span style="color: #549B7B; font-weight: 600;">匯率 USD/TWD</span><strong class="num" style="color: var(--text-navy);">${(appData.settings.usdToTwd || 31.5).toFixed(2)}</strong></div>
+        `;
+    } else if (isTracking || isAlloc) {
         subInfo.innerHTML = `
             <div><span style="color: #2C3E50; font-weight: 600;">台股部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.twNet)}</strong></div>
             <div><span style="color: #5B8DB8; font-weight: 600;">美股部位</span><strong class="num" style="color: var(--text-navy);">${fmtM(appData.totals.usNet)}</strong></div>
@@ -477,7 +505,7 @@ function navTo(target, el) {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
 
-    ['dashboard', 'allocation', 'tracking', 'history', 'info', 'transactions'].forEach(t => {
+    ['dashboard', 'allocation', 'valuation', 'tracking', 'history', 'info', 'transactions'].forEach(t => {
         const contentDiv = $(t + '-content');
         if (contentDiv) {
             contentDiv.classList[target === t ? 'remove' : 'add']('hide');
@@ -496,6 +524,7 @@ function navTo(target, el) {
 
     if (target === 'dashboard') renderAllocationChart();
     else if (target === 'allocation') renderAllocationView();
+    else if (target === 'valuation') renderValuationView();
     else if (target === 'history' && !isHistoryLoaded && (appData.twStocks.length > 0 || appData.usStocks.length > 0)) loadHistoryData();
     else if (target === 'tracking') renderTrackingChart();
     else if (target === 'transactions') renderEditHoldingsView();
@@ -692,9 +721,14 @@ const getChartOpt = (monthBoundaryIndices = new Set()) => ({
                 tickLength: 6,
                 tickWidth: 2,
                 drawOnChartArea: true,
+                borderDash: [5, 5],
+                borderDashOffset: 0,
+                lineWidth: function (context) {
+                    return monthBoundaryIndices.has(context.index) ? 1.5 : 0;
+                },
                 color: function (context) {
                     if (monthBoundaryIndices.has(context.index)) {
-                        return 'rgba(150, 150, 150, 0.25)';
+                        return 'rgba(100, 116, 139, 0.45)';
                     }
                     return 'rgba(0, 0, 0, 0)';
                 }
@@ -1264,7 +1298,7 @@ function renderAllocationView() {
                             <h2 class="card-title" style="margin-bottom:0;">${b.name}</h2>
                             <span class="allocation-tag ${tagClass}">${b.actionIcon} ${b.actionText}</span>
                         </div>
-                        <span class="card-subtitle" style="margin-top:4px;">${b.subtitle} ｜ 目標 ${b.targetMin}%～${b.targetMax}% (中位 ${b.targetMid}%)</span>
+                        <span class="card-subtitle" style="margin-top:4px;">${b.subtitle} ｜ 目標 ${b.targetMin}%～${b.targetMax}%</span>
                     </div>
                     <div class="text-right">
                         <div class="card-value num">NT$ ${fmtM(b.totalTwd)}</div>
@@ -1603,3 +1637,213 @@ async function saveCash() {
 }
 
 window.onload = () => refreshData(false);
+
+// 🌟 8. 【估值】標的目標價與評估理由管理
+function getHoldingSubtitle(symbol) {
+    for (const b of Object.values(FOUR_BUCKETS)) {
+        if (b.symbols && b.symbols[symbol]) {
+            return b.symbols[symbol].sub;
+        }
+    }
+    return '';
+}
+
+function cacheCurrentValuationInputs() {
+    const container = $('valuation-list-container');
+    if (!container) return;
+    const items = container.querySelectorAll('.valuation-item');
+    items.forEach(el => {
+        const symbol = el.getAttribute('data-symbol');
+        const market = el.getAttribute('data-market');
+        const targetInput = el.querySelector('.valuation-target-price');
+        const reasonInput = el.querySelector('.valuation-reason');
+        if (!symbol || !targetInput || !reasonInput) return;
+
+        const targetPriceVal = targetInput.value !== '' ? parseFloat(targetInput.value) : null;
+        const reasonVal = reasonInput.value.trim();
+
+        if (targetPriceVal !== null || reasonVal !== '') {
+            if (!appData.valuations[symbol]) {
+                appData.valuations[symbol] = {
+                    targetPrice: targetPriceVal,
+                    reason: reasonVal,
+                    market: market,
+                    updatedAt: new Date().toISOString()
+                };
+            } else {
+                appData.valuations[symbol].targetPrice = targetPriceVal;
+                appData.valuations[symbol].reason = reasonVal;
+                appData.valuations[symbol].market = market;
+            }
+        }
+    });
+}
+
+function updateValuationUpside(symbol, currentPrice) {
+    const itemEl = document.querySelector(`.valuation-item[data-symbol="${symbol}"]`);
+    if (!itemEl) return;
+    const targetInput = itemEl.querySelector('.valuation-target-price');
+    const upsideEl = itemEl.querySelector('.valuation-upside');
+    if (!targetInput || !upsideEl) return;
+
+    const targetVal = parseFloat(targetInput.value);
+    if (isNaN(targetVal) || targetVal <= 0 || !currentPrice || currentPrice <= 0) {
+        upsideEl.innerText = '--';
+        upsideEl.className = 'valuation-upside upside-flat';
+        return;
+    }
+
+    const upsidePct = ((targetVal - currentPrice) / currentPrice) * 100;
+    const sign = upsidePct > 0 ? '+' : '';
+    upsideEl.innerText = `${sign}${upsidePct.toFixed(1)}%`;
+    if (upsidePct > 0) {
+        upsideEl.className = 'valuation-upside upside-up';
+    } else if (upsidePct < 0) {
+        upsideEl.className = 'valuation-upside upside-down';
+    } else {
+        upsideEl.className = 'valuation-upside upside-flat';
+    }
+}
+
+function filterValuations(keyword) {
+    const q = (keyword || '').trim().toLowerCase();
+    const items = document.querySelectorAll('#valuation-list-container .valuation-item');
+    items.forEach(el => {
+        const symbol = (el.getAttribute('data-symbol') || '').toLowerCase();
+        const sub = (el.getAttribute('data-sub') || '').toLowerCase();
+        if (!q || symbol.includes(q) || sub.includes(q)) {
+            el.style.display = 'flex';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+}
+
+function renderValuationView() {
+    cacheCurrentValuationInputs();
+
+    const container = $('valuation-list-container');
+    if (!container) return;
+
+    const allStocks = [
+        ...appData.twStocks.map(s => ({ ...s, market: 'TW' })),
+        ...appData.usStocks.map(s => ({ ...s, market: 'US' }))
+    ];
+
+    const totalCountEl = $('val-total-count');
+    const setCountEl = $('val-set-count');
+    if (totalCountEl) totalCountEl.innerText = allStocks.length;
+
+    let setCount = 0;
+    allStocks.forEach(s => {
+        const rec = appData.valuations && appData.valuations[s.symbol];
+        if (rec && rec.targetPrice && rec.targetPrice > 0) setCount++;
+    });
+    if (setCountEl) setCountEl.innerText = setCount;
+
+    if (allStocks.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding: 20px 15px;">目前無持股標的，請至「編輯」頁面新增標的。</div>';
+        return;
+    }
+
+    container.innerHTML = allStocks.map(s => {
+        const isUS = s.market === 'US';
+        const curPrice = s.currentPrice || 0;
+        const curPriceStr = s.isError ? '連線中...' : (isUS ? '$ ' : 'NT$ ') + (curPrice ? curPrice.toFixed(2) : '--');
+        const subDesc = getHoldingSubtitle(s.symbol);
+
+        const savedVal = (appData.valuations && appData.valuations[s.symbol]) || {};
+        const targetVal = savedVal.targetPrice !== undefined && savedVal.targetPrice !== null ? savedVal.targetPrice : '';
+        const reasonVal = savedVal.reason || '';
+        const updatedTimeStr = savedVal.updatedAt ? fmtTime(new Date(savedVal.updatedAt).getTime()) : '';
+
+        let upsideText = '--';
+        let upsideClass = 'upside-flat';
+        if (targetVal !== '' && curPrice > 0) {
+            const upPct = ((parseFloat(targetVal) - curPrice) / curPrice) * 100;
+            const sign = upPct > 0 ? '+' : '';
+            upsideText = `${sign}${upPct.toFixed(1)}%`;
+            upsideClass = upPct > 0 ? 'upside-up' : (upPct < 0 ? 'upside-down' : 'upside-flat');
+        }
+
+        const badgeClass = isUS ? 'badge-us' : 'badge-tw';
+        const badgeText = isUS ? '美股' : '台股';
+
+        return `
+            <div class="valuation-item" data-symbol="${s.symbol}" data-market="${s.market}" data-sub="${subDesc}">
+                <div class="valuation-header-row">
+                    <div class="valuation-stock-info">
+                        <span class="valuation-badge ${badgeClass}">${badgeText}</span>
+                        <span class="valuation-symbol">${s.symbol}</span>
+                    </div>
+                    <div class="valuation-price-box">
+                        <span class="valuation-price-label">最新成交價</span>
+                        <span class="valuation-current-price num ${s.isError ? 'color-down' : ''}">${curPriceStr}</span>
+                    </div>
+                </div>
+
+                <div class="valuation-inputs-grid">
+                    <div class="valuation-input-wrapper">
+                        <div class="valuation-input-label">
+                            <span>目標價</span>
+                            <span class="valuation-upside ${upsideClass}">${upsideText}</span>
+                        </div>
+                        <input type="number" step="any" class="valuation-input valuation-target-price"
+                            placeholder="輸入目標價"
+                            value="${targetVal !== '' ? targetVal : ''}"
+                            oninput="updateValuationUpside('${s.symbol}', ${curPrice})">
+                    </div>
+
+                    <div class="valuation-input-wrapper">
+                        <div class="valuation-input-label">
+                            <span>評估理由 / 投資備忘</span>
+                            ${updatedTimeStr ? `<span style="font-size:10px; color:#A0AEC0;">更新：${updatedTimeStr}</span>` : '<span></span>'}
+                        </div>
+                        <input type="text" class="valuation-input valuation-reason"
+                            placeholder="填寫目標價推算邏輯、產業催化劑或停損利標準..."
+                            value="${escapeHtml(reasonVal)}">
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const searchInput = $('valuation-search-input');
+    if (searchInput && searchInput.value) {
+        filterValuations(searchInput.value);
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;');
+}
+
+async function saveValuations() {
+    cacheCurrentValuationInputs();
+
+    const saveBtn = $('btn-save-valuations');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 儲存至雲端中...';
+    }
+
+    try {
+        localStorage.setItem('wealth_valuations', JSON.stringify(appData.valuations));
+        await saveToCloud();
+        showToast('🎯 估值與目標價已同步至雲端！');
+        renderValuationView();
+        updateHeroBanner(currentTab);
+    } catch (e) {
+        showToast(`❌ 估值儲存失敗: ${e.message || e}`);
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> 修改完成';
+        }
+    }
+}
