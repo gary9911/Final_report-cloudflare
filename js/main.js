@@ -48,6 +48,8 @@ const FOUR_BUCKETS = {
         color: '#D96B6B',
         symbols: {
             'GOOG': { sub: '美國科技巨頭', market: 'US' },
+            'TSLA': { sub: '電動車巨頭', market: 'US' },
+            'SPCX': { sub: '主動策略', market: 'US' },
             '2881': { sub: '台灣金融股龍頭', market: 'TW' },
             '00947': { sub: '台灣IC設計', market: 'TW' }
         }
@@ -1085,7 +1087,7 @@ function calculateBucketsData() {
 
     const findHolding = (symbol, market) => {
         const pool = market === 'TW' ? appData.twStocks : appData.usStocks;
-        return pool.find(s => s.symbol === symbol);
+        return pool.find(s => s.symbol.toUpperCase() === symbol.toUpperCase());
     };
 
     const bucketsResult = {};
@@ -1640,9 +1642,12 @@ window.onload = () => refreshData(false);
 
 // 🌟 8. 【估值】標的目標價與評估理由管理
 function getHoldingSubtitle(symbol) {
+    const symUpper = (symbol || '').toUpperCase();
     for (const b of Object.values(FOUR_BUCKETS)) {
-        if (b.symbols && b.symbols[symbol]) {
-            return b.symbols[symbol].sub;
+        if (b.symbols) {
+            for (const [k, v] of Object.entries(b.symbols)) {
+                if (k.toUpperCase() === symUpper) return v.sub;
+            }
         }
     }
     return '';
